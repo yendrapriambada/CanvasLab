@@ -60,6 +60,7 @@ import {
   Link as LinkIcon,
   Radio,
   SquareRoundCorner,
+  List,
 } from "lucide-react";
 import { useBoard } from "../lib/useBoard";
 import { api } from "../lib/api";
@@ -690,6 +691,32 @@ export default function BoardEditor({
   const patchSelected = (patch: Partial<SceneObject>) => {
     if (!canEdit) return;
     mutate(() => editableSelected.forEach((o) => updateObject(o.id, patch)));
+  };
+  // A lightweight bullet list: every non-blank line gets a "• " prefix.
+  // Toggling off strips it again. Kept per-object (unlike patchSelected)
+  // since each object's own text decides what its next text should be.
+  const isBulletList = (text?: string) => {
+    const lines = (text || "").split("\n").filter((l) => l.trim() !== "");
+    return lines.length > 0 && lines.every((l) => l.startsWith("• "));
+  };
+  const toggleBulletList = () => {
+    if (!canEdit) return;
+    const turningOn = !isBulletList(one?.text);
+    mutate(() =>
+      editableSelected.forEach((o) => {
+        if (o.text === undefined) return;
+        const next = o.text
+          .split("\n")
+          .map((line) => {
+            if (line.trim() === "") return line;
+            const bulleted = line.startsWith("• ");
+            if (turningOn) return bulleted ? line : `• ${line}`;
+            return bulleted ? line.slice(2) : line;
+          })
+          .join("\n");
+        updateObject(o.id, { text: next });
+      }),
+    );
   };
   // `includeSectionChildren=false` keeps a frame's members out of it - used
   // for what gets *selected/highlighted* by a plain click (Figma: clicking a
@@ -3928,6 +3955,15 @@ export default function BoardEditor({
               <AlignCenter size={16} />
             )}
           </IconButton>
+          {one && textTypes.includes(one.type) && (
+            <IconButton
+              label="Bulleted list"
+              active={isBulletList(one?.text)}
+              onClick={toggleBulletList}
+            >
+              <List size={16} />
+            </IconButton>
+          )}
           {one?.type === "connector" && (
             <>
               <span className="toolbar-divider" />

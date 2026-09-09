@@ -65,8 +65,17 @@ export function connectorPoints(o:SceneObject,all:SceneObject[]):[Point,Point]{
 export function connectorPath(a:Point,b:Point,routing?:string){if(routing==='elbow'){const x=(a.x+b.x)/2;return `M ${a.x} ${a.y} H ${x} V ${b.y} H ${b.x}`;}return `M ${a.x} ${a.y} L ${b.x} ${b.y}`;}
 
 interface Obstacle extends Bounds { id:string }
+/** How far a shape's own rendered corner curve cuts inward - connectors need
+ * at least this much standoff, or a route bending right at the bounding box
+ * edge visually hugs/crosses the rounded corner instead of clearing it. */
+function cornerClearance(o:SceneObject):number {
+ if(!['rectangle','rounded','section'].includes(o.type))return 0;
+ const base=o.type==='rounded'?16:o.type==='section'?14:0;
+ return Math.min(o.radius??base,o.width/2,o.height/2);
+}
 function inflated(o:SceneObject,padding:number):Obstacle {
- const b=box(o);return {id:o.id,x:b.x-padding,y:b.y-padding,width:b.width+padding*2,height:b.height+padding*2};
+ const b=box(o),clearance=Math.max(padding,cornerClearance(o));
+ return {id:o.id,x:b.x-clearance,y:b.y-clearance,width:b.width+clearance*2,height:b.height+clearance*2};
 }
 function inside(p:Point,b:Bounds):boolean {
  return p.x>b.x+EPSILON&&p.x<b.x+b.width-EPSILON&&p.y>b.y+EPSILON&&p.y<b.y+b.height-EPSILON;
