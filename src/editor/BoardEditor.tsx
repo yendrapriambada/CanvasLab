@@ -674,16 +674,22 @@ export default function BoardEditor({
     if (!canEdit) return;
     mutate(() => editableSelected.forEach((o) => updateObject(o.id, patch)));
   };
-  const expanded = (ids: string[]) => {
+  // `includeSectionChildren=false` keeps a frame's members out of it - used
+  // for what gets *selected/highlighted* by a plain click (Figma: clicking a
+  // frame selects just the frame, never every object inside it). Dragging
+  // and duplicating still pull section members along, via the default true.
+  const expanded = (ids: string[], includeSectionChildren = true) => {
     const gs = new Set(
       objects
         .filter((o) => ids.includes(o.id) && o.groupId)
         .map((o) => o.groupId),
     );
     const sections = new Set(
-      objects
-        .filter((o) => ids.includes(o.id) && o.type === "section")
-        .map((o) => o.id),
+      includeSectionChildren
+        ? objects
+            .filter((o) => ids.includes(o.id) && o.type === "section")
+            .map((o) => o.id)
+        : [],
     );
     return objects.filter(
       (o) =>
@@ -1778,9 +1784,11 @@ export default function BoardEditor({
           : [...selected, hit.id]
         : selected.includes(hit.id)
           ? selected
-          : expanded([hit.id]).map((o) => o.id);
+          : expanded([hit.id], hit.type !== "section").map((o) => o.id);
       setSelected(ids);
       if (!hit.locked && canEdit) {
+        // Dragging (below) still carries a frame's members along with it -
+        // only the visible selection above skips that expansion.
         const items = expanded(ids).filter((o) => !o.locked);
         if (e.altKey) {
           duplicate(items, { x: 0, y: 0 });
