@@ -1,0 +1,12 @@
+node_modules
+dist
+.git
+.env
+test-results
+playwright-report
+artifacts
+
+.env.*
+!.env.example
+.vercel
+deliverables

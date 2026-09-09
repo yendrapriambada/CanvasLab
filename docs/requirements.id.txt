@@ -1,0 +1,1471 @@
+Anda bertindak sebagai tim engineering otonom yang menggabungkan peran:
+
+- Principal Full-Stack Engineer
+- Canvas/Graphics Engineer
+- Realtime Collaboration Engineer
+- Product Designer
+- QA Engineer
+
+TUGAS ANDA ADALAH MEMBANGUN APLIKASI YANG BENAR-BENAR BERFUNGSI, BUKAN HANYA MENJELASKAN CARA MEMBANGUNNYA.
+
+Saya ingin menguji kemampuan Anda membangun produk kompleks secara end-to-end melalui satu prompt.
+
+Bangun aplikasi web whiteboard kolaboratif yang mendekati FigJam dalam kemampuan inti, kualitas interaksi, kenyamanan penggunaan, dan pengalaman kolaborasi.
+
+Nama kerja aplikasi: CanvasLab.
+
+“One hit” berarti satu instruksi ini harus mengarahkan seluruh proses pemeriksaan environment, perancangan, implementasi, pengujian, perbaikan, dan penyerahan hasil dalam sesi kerja ini. Anda boleh melakukan banyak langkah internal dan menggunakan tools yang tersedia.
+
+==================================================
+1. HASIL AKHIR DAN BATAS PRODUK
+==================================================
+
+Aplikasi harus benar-benar dapat digunakan untuk:
+
+- Brainstorming dan ideation.
+- Membuat team canvas.
+- Menyusun business process dan flowchart.
+- Membuat mind map.
+- Menyusun customer journey.
+- Mengelola workshop dan retrospective.
+- Membuat diagram dengan konektor yang mengikuti objek.
+- Berkolaborasi secara realtime dengan pengguna lain.
+- Menyimpan serta mengelola banyak whiteboard dalam project.
+
+Target saya BUKAN:
+
+- Landing page.
+- UI mockup.
+- Prototype klik.
+- Canvas demo tanpa backend.
+- Frontend dengan data hardcoded.
+- Editor yang menyimpan seluruh data hanya di localStorage.
+- Tampilan multiplayer dengan cursor palsu.
+- Wrapper iframe FigJam.
+- Dashboard yang terlihat selesai tetapi tombolnya tidak berfungsi.
+
+Target saya adalah aplikasi full-stack yang dapat dijalankan, menyimpan pekerjaan secara persisten, mendukung kolaborasi nyata, dan dapat digunakan untuk pekerjaan sehari-hari.
+
+Fokus pada FigJam, bukan seluruh Figma Design.
+
+Tidak perlu membangun vector editing tingkat lanjut, design-system management, Dev Mode, prototyping antarscreen, billing, enterprise SSO, marketplace plugin, atau audio/video conference.
+
+Gunakan nama, branding, ikon, dan aset yang legal digunakan. Jangan memakai logo Figma, mengambil source code proprietary, atau menyatakan afiliasi.
+
+Library dan engine open-source boleh digunakan jika sesuai. Namun, hasilnya harus memenuhi spesifikasi ini, bukan sekadar mengganti nama editor lain.
+
+==================================================
+2. HIERARKI PRODUK: WORKSPACE → PROJECT → BOARD
+==================================================
+
+KEPUTUSAN PRODUK INI SUDAH FINAL:
+
+Workspace
+  → Project
+    → Board
+
+Tidak ada folder.
+Tidak ada subfolder.
+Tidak ada project di dalam project.
+Tidak ada board di dalam board.
+Jangan menambahkan lapisan organisasi lain dengan nama berbeda.
+
+Project adalah satu-satunya wadah pengelompokan board di dalam workspace.
+
+Contoh struktur:
+
+Workspace: Khalifah Tour [contoh]
+  Project: Digital Product
+    Board: Team Canvas
+    Board: Customer Journey
+    Board: Product Roadmap
+    Board: User Story Mapping
+
+  Project: Internal Work System
+    Board: Business Process
+    Board: Roles & Responsibilities
+    Board: Improvement Ideas
+
+  Project: Marketing
+    Board: Campaign Planning
+    Board: Content Brainstorming
+
+DEFINISI ENTITAS
+
+Workspace:
+Ruang kerja yang menaungi anggota dan beberapa project.
+
+Project:
+Wadah untuk mengelompokkan board yang berkaitan dengan satu topik, inisiatif, tim, atau kebutuhan kerja.
+
+Board:
+Satu file whiteboard independen dengan ID, URL, konten, akses, penyimpanan, dan dokumen kolaboratifnya sendiri.
+
+Canvas:
+Area kerja di dalam editor board, bukan entitas pengelompokan tambahan di dashboard.
+
+Setiap project wajib memiliki satu workspace.
+Setiap board wajib memiliki satu project.
+Jangan membuat board tanpa project.
+
+Membuka project langsung menampilkan board di dalamnya.
+Membuka board langsung menampilkan editor canvas.
+Jangan menambahkan layar perantara yang meminta pengguna memilih folder atau jenis file.
+
+PAGES, SECTIONS, DAN GROUPS
+
+Pages boleh tersedia sebagai fitur internal editor untuk membagi isi satu board, bukan sebagai lapisan organisasi di dashboard.
+
+Board baru otomatis memiliki satu page dan langsung membukanya. Pengguna tidak perlu membuat atau memilih page terlebih dahulu untuk mulai bekerja.
+
+Sections dan groups merupakan objek atau pengaturan isi canvas, bukan pengganti project, folder, atau board.
+
+Jangan menerjemahkan kebutuhan “beberapa board dalam project” menjadi beberapa pages di dalam satu board.
+
+==================================================
+3. ATURAN EKSEKUSI
+==================================================
+
+Mulai dengan memeriksa environment, repository, dependency, dan tools yang tersedia.
+
+Jika belum ada proyek, buat proyek lengkap dari awal.
+Jika sudah ada proyek, pahami struktur dan pertahankan pekerjaan yang masih relevan.
+Jangan menghapus atau menimpa file pengguna secara sembarangan.
+
+Ambil keputusan teknis secara mandiri untuk detail nonkritis yang belum ditentukan. Gunakan default yang mendukung aplikasi langsung berjalan.
+
+Catat asumsi penting di README. Jangan menghentikan pekerjaan untuk pertanyaan yang dapat diselesaikan dengan keputusan default yang masuk akal.
+
+Jangan berhenti setelah memberikan PRD, rencana, scaffold, struktur folder, atau halaman awal.
+
+Bangun vertical slice yang benar-benar berjalan, kemudian perluas sampai seluruh fitur wajib terintegrasi.
+
+Gunakan tools yang benar-benar tersedia. Jangan mengklaim telah:
+
+- Membuat file.
+- Menjalankan terminal.
+- Membuka browser.
+- Menguji aplikasi.
+- Menghasilkan screenshot.
+- Melakukan deployment.
+
+Jika tindakan tersebut tidak dilakukan.
+
+Jangan membuat layanan berbayar, melakukan pembelian, mempublikasikan data, atau mengubah resource eksternal tanpa otorisasi.
+
+Jika environment tidak memungkinkan menjalankan aplikasi, tetap hasilkan source code lengkap dalam file atau arsip nyata jika memungkinkan. Jelaskan bagian yang belum bisa diverifikasi.
+
+Jangan mengarang preview URL, screenshot, hasil test, angka performa, atau status deployment.
+
+Prioritaskan implementasi dan verifikasi dibandingkan penjelasan panjang dalam chat.
+
+==================================================
+4. RISET REFERENSI DAN FONDASI TEKNIS
+==================================================
+
+Lakukan pemeriksaan singkat terhadap dokumentasi resmi FigJam dan dokumentasi library yang dipilih.
+
+Referensi awal:
+
+https://www.figma.com/figjam/
+https://help.figma.com/hc/en-us/articles/1500004362321-Guide-to-FigJam
+https://docs.yjs.dev/
+
+Pelajari terutama:
+
+- Pola interaksi editor.
+- Sticky notes dan text editing.
+- Selection dan transforms.
+- Connector binding.
+- Sections.
+- Kolaborasi.
+- Workshop tools.
+
+Riset tidak boleh menghabiskan seluruh pekerjaan. Jika referensi tidak dapat diakses, lanjutkan berdasarkan spesifikasi dalam prompt ini dan catat keterbatasannya.
+
+Buat feature matrix:
+
+Requirement → Implementasi → Pengujian → Status.
+
+FONDASI DEFAULT YANG DISARANKAN
+
+- Frontend: React, TypeScript, Vite.
+- UI: Tailwind CSS dan komponen aksesibel seperlunya.
+- Canvas: Konva/react-konva dengan DOM overlay untuk text editing, atau engine lain yang lebih sesuai.
+- Collaboration: Yjs dan WebSocket server self-hosted.
+- Realtime server: Hocuspocus atau implementasi setara yang kompatibel dengan kebutuhan akses dan persistence.
+- Backend: Node.js dan TypeScript.
+- Database: SQLite untuk deployment single-instance.
+- Asset storage: filesystem persisten melalui backend.
+- Tests: unit/integration tests dan Playwright untuk browser E2E.
+
+Anda boleh mengganti pilihan tersebut dengan alasan teknis yang jelas.
+
+Periksa dokumentasi, kompatibilitas versi, dan lisensi sebelum memilih dependency. Sertakan lockfile.
+
+Jangan memakai engine yang memerlukan production license key berbayar sebagai dependency wajib jika key tersebut tidak tersedia.
+
+Jangan mengakali pemeriksaan lisensi.
+
+Fitur inti harus berjalan tanpa API key berbayar, akun cloud tambahan, atau layanan SaaS eksternal.
+
+Sediakan jalur menjalankan aplikasi yang sederhana, idealnya:
+
+docker compose up --build
+
+Sediakan juga perintah development lokal yang jelas.
+
+Gunakan persistent volumes untuk database dan assets. Rebuild atau restart container tidak boleh menghapus pekerjaan pengguna.
+
+Konfigurasi API dan WebSocket tidak boleh bergantung pada hardcoded localhost di browser. Aplikasi harus dapat diakses oleh perangkat lain yang terhubung ke server yang sama.
+
+==================================================
+5. WORKSPACE DAN PROJECT MANAGEMENT
+==================================================
+
+WORKSPACE
+
+Pengguna dapat:
+
+- Membuat workspace.
+- Mengganti nama workspace.
+- Beralih workspace melalui workspace switcher.
+- Melihat dan mengelola anggota sesuai izin.
+- Melihat project yang boleh diakses.
+
+Setelah registrasi, sediakan onboarding singkat atau otomatis buat workspace pribadi dan project awal agar pengguna dapat langsung membuat board.
+
+Jangan membuat akun dengan password tetap sebagai mekanisme onboarding production.
+
+PROJECT
+
+Pengguna yang berwenang dapat:
+
+- Membuat project.
+- Mengganti nama project.
+- Mengedit deskripsi.
+- Memilih ikon dan warna.
+- Melihat anggota dan akses.
+- Membuka daftar board di dalam project.
+- Memindahkan project ke Trash melalui konfirmasi.
+
+Halaman project menampilkan:
+
+- Nama dan deskripsi.
+- Anggota yang relevan.
+- Jumlah board yang dapat diakses.
+- Daftar/grid board.
+- Pencarian dalam project.
+- Sorting.
+- Tombol membuat board kosong.
+- Tombol membuat board dari template.
+
+Project tidak perlu memiliki task management, milestone, timeline, atau project scheduling. Fokusnya adalah mengorganisasikan board.
+
+Buat model permission yang jelas. Menjadi anggota workspace tidak otomatis berarti dapat melihat semua project privat.
+
+Dashboard dan API tidak boleh membocorkan nama, jumlah, thumbnail, atau metadata project yang tidak boleh diakses pengguna.
+
+==================================================
+6. BOARD MANAGEMENT DAN DASHBOARD
+==================================================
+
+BOARD CRUD
+
+Pengguna yang berwenang dapat:
+
+- Membuat blank board.
+- Membuat board dari template.
+- Mengganti nama.
+- Menduplikasi.
+- Memindahkan ke project lain.
+- Menambahkan atau menghapus favorite.
+- Memindahkan ke Trash.
+- Memulihkan dari Trash.
+- Membuka board terakhir.
+
+Pembuatan board dari halaman project otomatis menggunakan project tersebut.
+
+Pembuatan board dari Home harus menggunakan project tujuan yang jelas. Gunakan project aktif/terakhir jika sesuai, atau tampilkan pemilih project sederhana.
+
+Jangan membuat board tanpa project.
+
+MOVE BOARD
+
+Dukung pemindahan antarproject dalam workspace melalui:
+
+- Menu “Move to…”.
+- Drag-and-drop board ke project yang valid di sidebar.
+
+Move harus mempertahankan:
+
+- Board ID dan URL.
+- Konten canvas.
+- Pages.
+- Objects dan connector bindings.
+- Comments.
+- Assets.
+- Version history.
+
+Jangan mengimplementasikan move sebagai copy lalu delete.
+
+Periksa izin pada project asal dan tujuan. Jika perubahan lokasi mengubah akses, tampilkan konfirmasi yang menjelaskan perubahan tersebut.
+
+Jangan diam-diam mempertahankan atau membuka akses yang tidak sesuai kebijakan.
+
+Move lintas workspace bukan fitur wajib.
+
+DUPLICATE BOARD
+
+Duplicate menghasilkan board independen dengan ID dan referensi yang valid.
+
+Remap ID objek, pages, groups, sections, dan konektor secara konsisten.
+
+Assets hasil duplikasi harus tetap dapat diakses sesuai izin board baru.
+
+Mengedit hasil duplikasi tidak boleh mengubah board sumber.
+
+Dokumentasikan apakah comments, workshop history, dan version history ikut disalin. Jangan menduplikasi sesi workshop aktif sebagai sesi yang masih berjalan.
+
+DASHBOARD
+
+Sidebar memuat:
+
+- Workspace switcher.
+- Home.
+- Recent.
+- Favorites.
+- Projects.
+- Shared with me.
+- Trash.
+
+Recent, Favorites, dan Shared with me merupakan tampilan virtual, bukan lapisan organisasi baru.
+
+Daftar project dapat dipilih langsung. Jangan menambahkan folder tree.
+
+Area konten mendukung grid dan list.
+
+Board card menampilkan:
+
+- Nama board.
+- Preview thumbnail dari isi board.
+- Project asal jika relevan.
+- Pembuat atau pemilik sesuai model akses.
+- Waktu terakhir diperbarui.
+- Menu tindakan.
+
+Thumbnail tidak boleh menggunakan satu gambar dummy yang sama untuk semua board.
+
+Sebelum preview tersedia, tampilkan placeholder yang jujur.
+
+Favorites dan Recent bersifat per pengguna, bukan mengubah preferensi semua anggota.
+
+Sediakan breadcrumbs:
+
+Workspace / Project / Board
+
+Breadcrumbs dapat diklik sesuai akses.
+
+SEARCH DAN SORT
+
+Pencarian dashboard dapat menemukan project dan board berdasarkan nama.
+
+Sediakan sorting berdasarkan nama, waktu dibuat, dan waktu konten diperbarui.
+
+Search hanya mengembalikan entitas yang boleh diakses. Jangan membocorkan hasil melalui suggestion, count, thumbnail, atau error message.
+
+METADATA REALTIME
+
+Create, rename, move, dan trash harus terlihat pada dashboard pengguna lain yang memiliki akses tanpa refresh manual.
+
+Perubahan nama atau lokasi board harus memperbarui editor yang sedang terbuka.
+
+TRASH
+
+Gunakan soft delete.
+
+Menghapus project berisi board harus menampilkan jumlah board yang terdampak sebelum konfirmasi.
+
+Trash harus menyimpan hubungan antara project dan board yang terhapus akibat operasi tersebut.
+
+Restore project mengembalikan board yang ikut terhapus dalam operasi itu, bukan secara sembarangan memulihkan board yang sudah lebih dulu dihapus secara terpisah.
+
+Jika lokasi asal board tidak tersedia, minta project pemulihan yang valid dan berizin.
+
+Board di Trash tidak boleh tetap bisa diedit melalui URL lama atau koneksi WebSocket yang masih aktif.
+
+==================================================
+7. KUALITAS UI DAN STRUKTUR EDITOR
+==================================================
+
+Editor harus mengutamakan ruang canvas, bukan sidebar besar seperti dashboard admin.
+
+Gunakan karakter visual whiteboard profesional:
+
+- Canvas terang.
+- Subtle dot grid.
+- Floating toolbar.
+- Sticky notes pastel.
+- Selection outline yang jelas.
+- Spacing konsisten.
+- Ikon yang mudah dikenali.
+- Panel kontekstual yang tidak mendominasi.
+
+Sediakan:
+
+- Top bar untuk nama board, lokasi project, status penyimpanan, kolaborator, dan sharing.
+- Floating toolbar alat utama.
+- Contextual toolbar sesuai objek yang dipilih.
+- Panel pages/outline yang dapat ditutup.
+- Panel comments.
+- Kontrol zoom.
+- Fit-to-content dan fit-to-selection.
+- Context menu.
+- Shortcut help.
+- Undo/redo.
+- Akses kembali ke project.
+
+Semua tombol dan menu yang terlihat harus benar-benar berfungsi.
+
+Jangan menampilkan menu kosong, tombol dekoratif, atau fitur “coming soon” seolah-olah tersedia.
+
+Sediakan loading, empty, error, offline, dan permission-denied states yang layak.
+
+Modal dan popover harus mengelola keyboard focus dengan benar.
+
+Escape menutup overlay teratas atau membatalkan interaksi aktif secara konsisten.
+
+Utamakan desktop/laptop dengan mouse dan trackpad.
+
+Tablet harus tetap usable dengan touch gestures. Pada layar kecil, toolbar dan panel harus menyesuaikan agar tidak menutupi seluruh canvas.
+
+==================================================
+8. CANVAS ENGINE DAN INTERAKSI DASAR
+==================================================
+
+INFINITE CANVAS
+
+Dukung:
+
+- Area kerja luas dengan koordinat positif dan negatif.
+- Pan.
+- Zoom-to-pointer.
+- Fit-to-content.
+- Fit-to-selection.
+- Kembali ke 100%.
+- Space + drag untuk pan.
+- Middle-mouse drag untuk pan.
+- Wheel dan trackpad dengan perilaku yang konsisten.
+- Touch pan dan pinch zoom yang tidak bentrok dengan object manipulation.
+
+Pisahkan world coordinates, parent-relative coordinates, dan viewport coordinates.
+
+Jangan menyimpan posisi objek berdasarkan koordinat layar.
+
+Pointer, selection, text overlay, connector, serta collaborator cursor harus tetap benar pada seluruh tingkat zoom dan rotasi yang didukung.
+
+Viewport merupakan state lokal pengguna. Camera semua orang tidak boleh ikut berubah hanya karena satu pengguna melakukan pan.
+
+INTERACTION STATE
+
+Gunakan state machine atau model interaksi yang jelas untuk:
+
+Idle, selecting, marquee, dragging, resizing, rotating, panning, drawing, connecting, dan editing text.
+
+Hindari boolean flags yang menghasilkan interaksi saling bertabrakan.
+
+SELECT DAN TRANSFORM
+
+Implementasikan:
+
+- Single selection.
+- Shift multi-selection.
+- Marquee selection.
+- Drag.
+- Resize.
+- Rotation untuk objek yang relevan.
+- Duplicate.
+- Copy/cut/paste.
+- Delete.
+- Lock/unlock.
+- Bring forward/backward.
+- Bring to front/send to back.
+- Align.
+- Distribute.
+- Snapping.
+- Tidy-up.
+
+Dragging tidak boleh melompat setelah zoom.
+
+Resize harus memperbarui dimensi dan layout secara benar, bukan hanya menumpuk scale yang membuat border dan teks terdistorsi.
+
+Locked objects tidak boleh bisa diubah melalui shortcut atau multi-selection secara tidak sengaja.
+
+Sediakan selection handles dan hit targets yang tetap usable pada berbagai zoom.
+
+KEYBOARD
+
+Minimal dukung:
+
+- V: select.
+- H: hand/pan.
+- S: sticky.
+- T: text.
+- P: pen.
+- C: comment.
+- L: connector.
+- Ctrl/Cmd+C, V, X, D.
+- Ctrl/Cmd+Z dan Shift+Z.
+- Ctrl/Cmd+A.
+- Delete/Backspace.
+- Escape.
+- Arrow-key nudging.
+- Modifier untuk langkah nudging yang lebih besar.
+
+Ketika sedang mengetik, shortcut global tidak boleh mengambil alih input teks.
+
+==================================================
+9. OBJECTS DAN EDITING
+==================================================
+
+A. STICKY NOTES
+
+Sticky notes dapat:
+
+- Dibuat dengan klik.
+- Langsung diketik setelah dibuat.
+- Diedit kembali.
+- Dipindah.
+- Di-resize.
+- Diganti warna.
+- Diduplikasi.
+
+Dukung multiline text, wrapping, alignment, ukuran teks, dan formatting dasar.
+
+Teks panjang tidak boleh hilang atau terpotong tanpa mekanisme yang jelas.
+
+Sediakan opsi menampilkan nama pembuat. Identitas pembuat berasal dari identitas yang diverifikasi server.
+
+Dukung paste beberapa baris teks menjadi beberapa sticky notes.
+
+B. SHAPES
+
+Minimal:
+
+- Rectangle.
+- Rounded rectangle.
+- Ellipse.
+- Diamond.
+- Triangle.
+- Bentuk flowchart dasar.
+
+Shapes mendukung:
+
+- Fill.
+- Stroke.
+- Stroke width.
+- Dashed/solid line.
+- Opacity.
+- Teks di dalamnya.
+- Alignment teks.
+- Resize dan rotation yang relevan.
+
+C. TEXT
+
+Text object mendukung:
+
+- Inline editing.
+- Multiline.
+- Wrapping.
+- Font size.
+- Bold.
+- Italic.
+- Alignment.
+- Hyperlink yang aman.
+
+Dukung text selection, clipboard, serta input composition/IME.
+
+Text overlay harus mengikuti posisi, ukuran, zoom, dan rotasi objek secara benar.
+
+D. CONNECTORS
+
+Konektor harus benar-benar terhubung ke objek, bukan garis bebas yang kebetulan menyentuh shape.
+
+Dukung:
+
+- Straight connector.
+- Elbow/orthogonal connector.
+- Arrowheads.
+- Warna.
+- Ketebalan.
+- Dashed line.
+- Label yang bisa diedit.
+
+Simpan binding ke object ID dan anchor yang relevan.
+
+Endpoint mengikuti boundary objek ketika objek dipindah, di-resize, atau ditransform sesuai kemampuan yang didukung.
+
+Pengguna dapat:
+
+- Memindahkan endpoint.
+- Mengganti objek tujuan.
+- Melepaskan endpoint menjadi titik bebas.
+- Membuat objek baru yang langsung terhubung melalui quick-create.
+
+Jika objek dan konektor diduplikasi bersama, binding harus mengarah ke objek hasil duplikasi yang benar.
+
+Jika objek dihapus, lakukan detach atau cleanup secara konsisten.
+
+Jangan meninggalkan orphan references.
+
+E. SECTIONS
+
+Section memiliki:
+
+- Judul.
+- Background.
+- Ukuran.
+- Membership objek yang jelas.
+
+Memindahkan section harus memindahkan anggotanya.
+
+Memindahkan objek keluar-masuk section harus memperbarui membership secara konsisten.
+
+Resize section tidak boleh secara tidak sengaja mengubah skala seluruh isi jika perilaku yang dimaksud hanya mengubah batas section.
+
+F. GROUPS
+
+Dukung group/ungroup dan transform kumpulan objek.
+
+Cegah circular parent-child relationships.
+
+Perbedaan group dan section harus nyata dalam perilakunya.
+
+G. DRAWING
+
+Sediakan pen, highlighter, warna, ketebalan, dan eraser.
+
+Stroke harus halus tanpa menghasilkan jumlah titik berlebihan.
+
+Satu stroke merupakan satu aksi undo yang masuk akal.
+
+==================================================
+10. PAGES DAN FITUR PRODUKTIVITAS
+==================================================
+
+PAGES
+
+Satu board dapat memiliki beberapa pages internal.
+
+Dukung:
+
+- Create.
+- Rename.
+- Reorder.
+- Duplicate.
+- Delete.
+
+Board baru langsung membuka page default.
+
+Panel pages boleh ditutup. Pages tidak boleh muncul sebagai level pengelompokan project di dashboard.
+
+Tetapkan perilaku aman ketika page yang sedang dibuka dihapus kolaborator.
+
+Jangan menghapus page terakhir tanpa membuat atau mempertahankan area kerja yang valid.
+
+IMAGES
+
+Dukung PNG, JPEG, dan WebP melalui:
+
+- File picker.
+- Drag-and-drop.
+- Clipboard image.
+
+Gambar dapat dipindah, di-resize dengan aspect ratio yang benar, dan dihapus.
+
+Assets disimpan secara persisten di server.
+
+Jangan hanya menggunakan browser object URL yang mati setelah refresh.
+
+TABLES
+
+Buat tabel yang dapat diedit.
+
+Dukung:
+
+- Tambah/hapus baris.
+- Tambah/hapus kolom.
+- Resize.
+- Edit cell.
+- Paste data tabular.
+- Import/export CSV.
+
+Gunakan escaping CSV yang benar dan batas ukuran yang terdokumentasi.
+
+MIND MAP
+
+Dukung root, child, dan sibling dengan konektor otomatis.
+
+Sediakan shortcut penambahan node dan auto-layout sederhana yang dapat dijalankan ulang.
+
+SEARCH DALAM BOARD
+
+Cari teks pada board dan navigasikan camera ke hasil.
+
+Jika hasil ada pada page lain, pindahkan page secara jelas dan pilih objek terkait.
+
+OUTLINE
+
+Tampilkan pages dan sections untuk navigasi board besar.
+
+Sediakan daftar objek yang membantu navigasi keyboard dan aksesibilitas.
+
+CLIPBOARD
+
+Copy/paste kumpulan objek harus mempertahankan:
+
+- Konten.
+- Style.
+- Posisi relatif.
+- Grouping.
+- Section membership yang relevan.
+- Connector binding.
+- Referensi assets yang valid.
+
+Gunakan ID baru untuk objek hasil paste.
+
+Jangan memodifikasi objek sumber.
+
+==================================================
+11. AKUN, MEMBERSHIP, DAN PERMISSION
+==================================================
+
+Implementasikan registrasi/login sederhana tanpa ketergantungan pada email provider eksternal, logout, serta session yang benar.
+
+Pisahkan identitas pengguna, workspace membership, project membership, dan board-specific sharing.
+
+Gunakan role yang jelas:
+
+- Owner.
+- Editor.
+- Commenter.
+- Viewer.
+
+Workspace boleh memiliki owner/admin untuk administrasi workspace. Jelaskan pemetaannya terhadap akses project.
+
+Project permission menjadi akses dasar untuk board di dalamnya.
+
+Board-specific grants dapat memberikan akses ke satu board tanpa membuka seluruh project.
+
+Definisikan effective permission secara eksplisit. Jangan membuat role yang lebih rendah pada board diam-diam membatalkan akses yang lebih tinggi dari project tanpa kebijakan yang jelas.
+
+Owner mengelola akses sesuai scope kepemilikannya.
+Editor mengubah konten.
+Commenter menambahkan komentar tanpa mengedit scene.
+Viewer hanya melihat.
+
+Buat operation-permission matrix untuk:
+
+- Workspace administration.
+- Create/edit project.
+- Create/rename/move/trash board.
+- Edit scene.
+- Comment.
+- Start workshop.
+- Share.
+- Export.
+- Restore.
+
+Identitas created_by bukan alasan otomatis untuk melewati permission yang berlaku.
+
+SHARING
+
+Sediakan:
+
+- Undangan atau pemberian akses kepada pengguna terdaftar.
+- Share link yang benar-benar berfungsi.
+- Role yang jelas.
+- Pencabutan link dan akses.
+- Tampilan siapa yang memiliki akses.
+
+Jika email provider tidak tersedia, jangan mengklaim email undangan telah dikirim.
+
+Guest access boleh tersedia melalui token dengan scope dan izin yang jelas.
+
+Default share link harus least-privilege. Mengetahui board ID saja tidak memberikan akses.
+
+Board yang dibagikan secara langsung dapat muncul pada Shared with me, tanpa membocorkan project atau board lain.
+
+SERVER ENFORCEMENT
+
+Permission wajib ditegakkan pada:
+
+- API.
+- WebSocket.
+- Asset endpoints.
+- Thumbnail endpoints.
+- Search.
+- Import/export.
+- Dashboard events.
+
+Jangan hanya menyembunyikan tombol frontend.
+
+Pencabutan akses harus menghentikan future server access dan active sync yang tidak lagi diizinkan.
+
+==================================================
+12. KOLABORASI REALTIME
+==================================================
+
+Kolaborasi harus bekerja antara dua browser context berbeda dan antarperangkat yang mengakses server yang sama.
+
+BroadcastChannel atau localStorage event saja tidak dianggap multiplayer lintas perangkat.
+
+Implementasikan:
+
+- Live cursors.
+- Nama dan identitas kolaborator.
+- Presence.
+- Selected-object indication.
+- Pembaruan objects secara realtime.
+- Reconnect.
+- Late joiner synchronization.
+- Follow collaborator atau presenter mode.
+
+Camera tidak boleh diambil alih tanpa mekanisme yang transparan. Pengguna harus dapat keluar dari follow mode dengan mudah.
+
+PISAHKAN STATE
+
+Pisahkan:
+
+1. Persistent collaborative content.
+2. Ephemeral presence.
+3. Local viewport dan UI state.
+4. Server-authoritative metadata.
+5. Private workshop data.
+
+Pointer movement tidak boleh menghasilkan snapshot database terus-menerus.
+
+MODEL MERGE
+
+Jangan mengirim seluruh board sebagai satu JSON blob yang saling menimpa.
+
+Jika memakai Yjs, gunakan shared types pada granularity yang sesuai.
+
+Membungkus satu string JSON besar dalam CRDT bukan solusi konflik yang memadai.
+
+Text editing bersama harus menggunakan representasi kolaboratif yang sesuai, bukan overwrite seluruh teks setiap keystroke.
+
+Perubahan teks, style, dan posisi yang tidak bertentangan seharusnya tidak saling menghapus.
+
+Untuk perubahan yang memang bertentangan, gunakan kebijakan konflik yang deterministik dan dokumentasikan.
+
+UNDO/REDO
+
+Undo harus scoped terhadap aksi lokal pengguna.
+
+Undo pengguna A tidak boleh menghapus pekerjaan pengguna B melalui rollback seluruh snapshot.
+
+Gabungkan drag, resize, freehand stroke, dan bulk operation menjadi unit undo yang masuk akal.
+
+Jaga consistency ketika undo melibatkan objek yang telah diubah atau dihapus kolaborator.
+
+RECONNECT
+
+Tangani disconnect, reconnect, dan update tertunda.
+
+Client harus converge ke state yang konsisten setelah tersambung kembali.
+
+Jangan menerima perubahan dari pengguna hanya karena ia pernah memiliki akses sebelum offline.
+
+==================================================
+13. COMMENTS DAN WORKSHOP TOOLS
+==================================================
+
+COMMENTS
+
+Pengguna dapat:
+
+- Membuat thread pada objek atau posisi canvas.
+- Membalas.
+- Resolve.
+- Reopen.
+- Menavigasikan camera ke lokasi komentar.
+
+Comments harus persisten dan tersinkron.
+
+Author, permission, dan operasi thread diperiksa server.
+
+TIMER
+
+Timer bersama memiliki:
+
+- Start.
+- Pause.
+- Resume.
+- Reset.
+
+Gunakan waktu acuan server agar hitungan antarpengguna tidak terus menyimpang.
+
+Jangan membuat timer independen pada masing-masing browser.
+
+VOTING
+
+Fasilitator membuat sesi dengan:
+
+- Judul.
+- Objek yang eligible.
+- Batas suara per peserta.
+- Start/end session.
+- Tampilan hasil.
+
+Quota dan transisi sesi diperiksa server.
+
+Sebelum sesi berakhir, pilihan pengguna lain tidak boleh dikirim kepada peserta.
+
+Menyembunyikan suara melalui CSS tidak dianggap privat.
+
+Jangan menyimpan private votes di shared document yang dapat dibaca semua client.
+
+Hindari membocorkan pilihan melalui selection presence atau cursor behavior selama mode voting privat.
+
+Setelah voting selesai, tampilkan hasil agregat dan simpan riwayatnya.
+
+Jelaskan bahwa batas suara diberlakukan terhadap identitas peserta yang dikelola aplikasi. Jangan mengklaim dapat menjamin satu manusia satu suara tanpa mekanisme identitas yang mendukungnya.
+
+REACTIONS
+
+Sediakan:
+
+- Stamps yang menetap pada board.
+- Emoji reactions yang bersifat sementara.
+- Cursor chat berupa pesan singkat sementara.
+
+Batasi panjang dan masa tampil pesan.
+
+FACILITATOR
+
+Tentukan otoritas fasilitator secara eksplisit.
+
+Jangan membiarkan client mana pun mengubah timer, menutup voting, atau memodifikasi hasil tanpa pemeriksaan izin server.
+
+==================================================
+14. PERSISTENCE, OFFLINE, DAN DATA MODEL
+==================================================
+
+PERSISTENCE
+
+Workspace, project, board, pages, objects, connectors, comments, assets, membership, serta workshop results harus tetap tersedia setelah:
+
+- Refresh.
+- Browser ditutup.
+- Server restart.
+- Container restart.
+
+LocalStorage bukan database utama aplikasi.
+
+Jika menggunakan CRDT, simpan bentuk persistence yang mempertahankan informasi merge yang diperlukan, bukan hanya JSON hasil render.
+
+Gunakan transaksi database untuk operasi metadata yang perlu atomik, seperti move, trash, restore, dan perubahan membership.
+
+SAVE STATUS
+
+Tampilkan status yang jujur:
+
+- Saving.
+- Saved.
+- Offline.
+- Reconnecting.
+- Failed to save.
+- Local changes pending sync, jika relevan.
+
+“Saved” harus memiliki arti yang terdokumentasi dan berdasarkan konfirmasi persistence server.
+
+Bedakan perubahan yang baru tersimpan lokal dari yang sudah tersimpan server.
+
+Jangan bergantung hanya pada debounce atau beforeunload untuk menyelamatkan perubahan.
+
+OFFLINE
+
+Gunakan cache persisten seperti IndexedDB untuk memulihkan pekerjaan dan menangani koneksi sementara terputus.
+
+Offline editing minimal mendukung perubahan scene yang dapat direkonsiliasi.
+
+Operasi sensitif seperti permission, move antarproject, dan administrasi workshop boleh mensyaratkan koneksi server.
+
+Jangan menampilkan operasi tersebut sebagai berhasil jika belum disetujui server.
+
+Cache harus diisolasi per akun dan board. Logout/login akun lain tidak boleh membocorkan data sebelumnya.
+
+Jika izin berubah saat offline, tolak sync yang tidak lagi diizinkan dan tampilkan penanganan yang jelas. Jangan memaksa perubahan masuk.
+
+DATA MODEL
+
+Minimal mencakup:
+
+- User.
+- Session.
+- Workspace.
+- Workspace membership.
+- Project.
+- Project membership.
+- Board.
+- Board-specific grant.
+- Share link.
+- Page.
+- Canvas object.
+- Connector binding.
+- Asset.
+- Comment thread.
+- Comment message.
+- Workshop session.
+- Vote.
+- Snapshot.
+- User favorite/recent activity.
+- Trash metadata.
+
+JANGAN membuat entitas folder atau parent project.
+
+Project memiliki workspaceId.
+Board memiliki projectId.
+Relasi harus divalidasi server.
+
+Gunakan ID stabil dan schemaVersion.
+
+Sediakan migration untuk schema database dan format dokumen.
+
+Metadata akses, lokasi project/board, dan private votes tidak boleh dapat diubah melalui arbitrary canvas document updates.
+
+VERSIONS
+
+Sediakan version history atau snapshot sederhana.
+
+Pemulihan snapshot default membuat salinan board di project yang valid, bukan diam-diam menimpa pekerjaan kolaborator aktif.
+
+SEED
+
+Seed data harus idempotent, khusus development/test jika mengandung akun contoh, dan tidak berjalan ulang setiap membuka aplikasi.
+
+Jangan menimpa pekerjaan pengguna dengan sample data.
+
+==================================================
+15. IMPORT, EXPORT, DAN PORTABILITAS
+==================================================
+
+PNG
+
+Export seluruh page, section, atau selection menjadi PNG.
+
+Export mencakup seluruh area yang dipilih, termasuk objek di luar viewport.
+
+Jangan hanya mengambil screenshot layar.
+
+SVG
+
+Sediakan SVG export untuk objek vector dengan penanganan images, fonts, dan text yang jelas.
+
+FORMAT EDITABLE
+
+Sediakan format aplikasi sendiri, misalnya bundle:
+
+.canvaslab
+
+Bundle memuat:
+
+- Schema version.
+- Board metadata yang aman.
+- Pages.
+- Objects.
+- Connector bindings.
+- Group/section relationships.
+- Assets yang dibutuhkan.
+
+Import hasil export harus mengembalikan board yang masih dapat diedit, bukan satu gambar datar.
+
+Import dilakukan ke project tujuan yang valid dan berizin.
+
+Generate ulang ID yang perlu agar tidak bertabrakan dengan board yang sudah ada.
+
+Jangan membawa membership, share token, atau akses sensitif dari file export sebagai izin yang langsung dipercaya.
+
+Jangan mengklaim mendukung format native .fig atau .jam tanpa parser nyata dan pengujian kompatibilitas.
+
+VALIDASI
+
+Tangani:
+
+- File rusak.
+- Format tidak didukung.
+- Ukuran berlebihan.
+- Missing assets.
+- Font loading failure.
+- Download failure.
+- Canvas export limits.
+- Path traversal dan decompression abuse jika memakai ZIP.
+
+Tampilkan error yang informatif tanpa membuat aplikasi blank atau crash.
+
+==================================================
+16. TEMPLATE DAN SAMPLE CONTENT
+==================================================
+
+Sediakan template yang dibangun dari objek asli yang dapat diedit, bukan gambar background.
+
+Minimal:
+
+- Brainstorming.
+- Retrospective.
+- Kanban.
+- Flowchart.
+- Mind map.
+- Customer journey.
+- Team canvas.
+
+Team canvas mencakup:
+
+- Purpose.
+- Desired outcomes.
+- Stakeholders.
+- Roles.
+- Key deliverables.
+- Core components.
+- Ways of working.
+
+Template harus menghasilkan board baru di project yang dipilih.
+
+Semua ID dan referensi dibuat ulang dengan benar.
+
+Perubahan board hasil template tidak boleh mengubah template atau board lain.
+
+Sediakan sample workspace/project/board secukupnya untuk memperlihatkan hierarki produk, tetapi beri label sebagai contoh.
+
+Contoh sample board:
+
+“Workshop Digital Product”
+
+Board ini memperlihatkan sticky notes, sections, connectors, comments, dan contoh hasil voting.
+
+Sample content bukan data nyata organisasi dan bukan pengganti implementasi fitur.
+
+Blank board harus selalu tersedia sebagai pilihan utama.
+
+==================================================
+17. KEAMANAN, AKSESIBILITAS, DAN PERFORMA
+==================================================
+
+KEAMANAN
+
+Hash password dengan algoritma yang sesuai.
+Jangan menyimpan password plaintext.
+
+Gunakan session yang aman dan validasi Origin/CSRF sesuai arsitektur.
+
+Batasi request, upload, dan ukuran realtime update.
+
+Jangan menaruh secret di frontend.
+
+Jangan mempercayai role, ownerId, authorId, projectId, atau identitas presence yang dikirim client tanpa pemeriksaan.
+
+Batasi upload berdasarkan ukuran dan tipe file sebenarnya.
+
+Tangani filename dan path secara aman.
+
+Sanitasi rich content, hyperlink, SVG, dan import agar tidak menjadi jalur XSS.
+
+Jangan menambahkan arbitrary server-side URL fetching untuk link preview tanpa proteksi yang memadai.
+
+Protected assets dan thumbnails harus mengikuti akses board.
+
+Dokumentasikan cara menjalankan production dengan HTTPS dan secure session configuration.
+
+AKSESIBILITAS
+
+Gunakan:
+
+- Label toolbar.
+- Tooltip.
+- Focus state.
+- Navigasi keyboard.
+- Kontras memadai.
+- Outline/list representation untuk navigasi objek.
+
+Jangan bergantung sepenuhnya pada warna untuk menunjukkan status atau permission.
+
+PERFORMA
+
+Gunakan teknik yang sesuai:
+
+- Viewport culling.
+- Targeted subscriptions.
+- Batching.
+- Throttled presence.
+- Spatial indexing jika diperlukan.
+- Memoization yang tepat.
+- Stroke simplification.
+
+Jangan me-render ulang seluruh aplikasi untuk setiap mouse movement.
+
+Buat benchmark yang dapat diulang dengan minimal:
+
+- 1.000 objek.
+- 100 konektor.
+
+Ukur pan, zoom, drag, text editing, dan propagasi perubahan pada environment pengujian.
+
+Catat hasil aktual dan keterbatasannya.
+
+Jangan mengarang FPS, latency, kapasitas concurrent users, atau klaim scalability.
+
+Deployment default boleh single-instance. Jangan menyebutnya horizontally scalable jika belum diimplementasikan.
+
+==================================================
+18. PENGUJIAN WAJIB
+==================================================
+
+Jangan menyimpulkan selesai hanya karena build berhasil atau editor tampil.
+
+Jalankan typecheck, lint, unit tests, integration tests, dan browser E2E sejauh tools tersedia.
+
+Browser test harus melakukan interaksi nyata. Test yang hanya memanggil helper internal tidak cukup membuktikan drag, text editing, atau keyboard berfungsi.
+
+A. ORGANISASI DAN DASHBOARD
+
+01. Fresh install → registrasi/login → workspace → project → board → editor.
+
+02. Buat dua project dan beberapa board. Pastikan dashboard hanya menggunakan Workspace → Project → Board, tanpa folder.
+
+03. Buka setiap board dan verifikasi kontennya independen.
+
+04. Rename project dan board. URL berbasis ID tetap valid dan browser lain menerima pembaruan.
+
+05. Move board antarproject melalui “Move to…” dan drag-and-drop. ID, URL, konten, comments, dan assets tetap utuh.
+
+06. Duplicate board. Perubahan salinan tidak mengubah sumber.
+
+07. Favorites dan Recent milik satu pengguna tidak mengubah preferensi pengguna lain.
+
+08. Trash project berisi board, lalu restore. Hubungan dan isi board kembali dengan benar.
+
+09. Pencarian, counts, thumbnails, dan Shared with me tidak membocorkan entitas tanpa izin.
+
+B. EDITOR
+
+10. Buat sticky, ketik multiline, ubah warna, resize, refresh, lalu verifikasi konten tetap sama.
+
+11. Pan/zoom lalu select, drag, resize, dan edit teks. Tidak boleh ada pergeseran pointer akibat transform salah.
+
+12. Hubungkan dua shapes. Move dan resize keduanya. Connector tetap menempel.
+
+13. Duplicate/copy-paste kumpulan objects dengan connector. Binding hasil salinan benar.
+
+14. Group/ungroup dan move section. Posisi serta membership tetap konsisten.
+
+15. Delete dan undo beberapa jenis objek tanpa orphan references.
+
+16. Create, reorder, duplicate, dan delete page. Penghapusan page yang sedang dibuka kolaborator ditangani aman.
+
+17. Uji IME/composition, text selection, clipboard, Escape, dan shortcut agar tidak bentrok dengan text editing.
+
+18. Uji table editing, CSV round-trip, mind map creation, dan freehand drawing.
+
+C. REALTIME DAN INTEGRITAS DATA
+
+19. Buka board dengan dua akun pada browser context berbeda. Edit dari keduanya dan verifikasi sinkronisasi.
+
+20. Edit objek yang sama secara bersamaan, termasuk teks dan style. Verifikasi convergence sesuai kebijakan konflik.
+
+21. Setelah pengguna B mengedit, lakukan undo sebagai pengguna A. Pekerjaan B tidak boleh hilang akibat rollback seluruh board.
+
+22. Putuskan koneksi client, lakukan offline edit yang didukung, reconnect, dan verifikasi konsistensi.
+
+23. Tunggu status server-saved, restart server, lalu buka board kembali. Data dan assets tetap tersedia.
+
+24. Tutup dan buka kembali browser dengan pending local changes. Verifikasi recovery sesuai mekanisme yang didokumentasikan.
+
+D. PERMISSION
+
+25. Viewer/commenter mencoba mengedit scene melalui UI serta request API/WebSocket langsung. Server harus menolak.
+
+26. Pengguna tanpa akses mencoba membuka board, asset, thumbnail, export, dan search results. Server tidak boleh membocorkan data.
+
+27. Cabut akses pengguna yang sedang online. Sync dan akses berikutnya yang tidak sah ditolak.
+
+28. Move board ke project dengan membership berbeda. Verifikasi konfirmasi serta effective permissions sesudah move.
+
+29. Trash board yang sedang terbuka. Client tidak boleh terus mengedit melalui koneksi lama.
+
+E. FITUR LAIN
+
+30. Upload image, reload, dan buka dari context lain. Image tetap tersedia.
+
+31. Buat comment, reply, resolve, dan reopen. Perubahan tersinkron dan persisten.
+
+32. Jalankan timer dan voting dengan dua pengguna. Periksa quota, otoritas fasilitator, privasi sebelum selesai, dan hasil setelah selesai.
+
+33. Export PNG, SVG, dan format editable. Import ulang format editable ke project lain dan verifikasi objek tetap dapat diedit.
+
+34. Buat board dari template. Mengubah hasilnya tidak mengubah template atau board lain.
+
+35. Jalankan benchmark board besar dan catat hasil aktual.
+
+36. Uji import rusak, upload berlebihan, network failure, missing asset, dan permission denied. Tidak boleh menyebabkan blank screen.
+
+VISUAL QA
+
+Periksa console dan network errors.
+
+Ambil screenshot nyata untuk:
+
+- Dashboard workspace.
+- Halaman project dengan beberapa board.
+- Blank editor.
+- Sample board.
+- Share dialog.
+- Comments.
+- Tampilan tablet.
+
+Periksa setidaknya viewport:
+
+- 1440 × 900.
+- 1280 × 800.
+- 1024 × 768.
+
+Perbaiki bug yang ditemukan, lalu jalankan ulang test relevan.
+
+Laporkan setiap test sebagai:
+
+Passed / Failed / Not run.
+
+Berikan alasan untuk Failed dan Not run.
+
+Jangan mengganti pengujian dengan checklist yang semuanya ditandai selesai tanpa eksekusi.
+
+==================================================
+19. URUTAN PEMBANGUNAN
+==================================================
+
+Mulai dengan vertical slice:
+
+Login
+→ Workspace
+→ Project
+→ Create board
+→ Open editor
+→ Create/edit object
+→ Persist
+→ Reload
+→ Open with second user.
+
+Setelah slice tersebut bekerja, perluas:
+
+1. Object types dan interaksi canvas.
+2. Connector behavior.
+3. Realtime concurrency dan local undo.
+4. Board management, sharing, move, trash, dan restore.
+5. Pages dan productivity tools.
+6. Comments dan workshop tools.
+7. Templates serta import/export.
+8. Performance, accessibility, dan visual polish.
+
+Rancang realtime dan permission sejak awal. Jangan menambahkan multiplayer palsu pada akhir pekerjaan.
+
+Jika sumber daya terbatas, prioritaskan:
+
+Integritas data dan permission
+→ Hierarki workspace/project/board yang benar
+→ Interaksi canvas
+→ Realtime
+→ Fitur produktivitas
+→ Kelengkapan visual.
+
+Jangan diam-diam mengurangi scope. Fitur yang belum selesai wajib tercatat jelas.
+
+AI assistance bukan prioritas dan tidak wajib.
+
+Hanya tambahkan setelah fitur inti stabil serta provider nyata tersedia.
+
+Jangan menampilkan hasil hardcoded sebagai AI generation.
+
+==================================================
+20. DELIVERABLE DAN DEFINITION OF DONE
+==================================================
+
+Serahkan:
+
+A. Source code lengkap dan modular.
+
+B. Dependency manifest dan lockfile.
+
+C. Contoh environment configuration tanpa secret.
+
+D. Database schema, migrations, dan development seed yang aman.
+
+E. Implementasi frontend, backend, realtime server, dan persistent asset storage.
+
+F. Docker setup atau jalur local setup yang dapat diikuti.
+
+G. Automated tests dan laporan hasil aktual.
+
+H. README berisi:
+   - Arsitektur singkat.
+   - Hierarki Workspace → Project → Board.
+   - Cara instalasi.
+   - Cara menjalankan.
+   - Cara menjalankan test.
+   - Cara mencoba dua pengguna.
+   - Permission model.
+   - Backup/restore.
+   - Deployment single-instance.
+   - Batasan yang diketahui.
+
+I. Feature matrix dengan status implementasi dan verifikasi.
+
+J. Screenshot dan preview hanya jika benar-benar dihasilkan.
+
+K. Daftar keterbatasan spesifik dan pekerjaan yang belum selesai.
+
+L. Arsip source code jika environment mendukungnya.
+
+Definition of Done tidak hanya berarti UI tampil.
+
+Alur berikut harus benar-benar berfungsi:
+
+Pengguna login
+→ Masuk workspace
+→ Membuat project
+→ Membuat beberapa board langsung di project
+→ Membuka salah satu board
+→ Membuat sticky notes, shapes, dan connectors
+→ Mengundang pengguna lain
+→ Berkolaborasi
+→ Menutup dan membuka kembali board tanpa kehilangan pekerjaan
+→ Memindahkan board ke project lain
+→ Tetap membuka board yang sama melalui URL yang sama.
+
+Jangan memakai TODO sebagai pengganti jalur utama.
+Jangan memakai backend palsu.
+Jangan memakai mock collaboration.
+Jangan memakai placeholder save.
+Jangan menyembunyikan fitur wajib yang gagal di balik UI seolah-olah selesai.
+
+Dalam jawaban akhir, berikan:
+
+- Ringkasan yang benar-benar dibangun.
+- Lokasi source code atau arsip.
+- Cara menjalankan.
+- Cara menguji dua pengguna.
+- Hasil test aktual.
+- Keterbatasan yang tersisa.
+
+Jangan menyebut “production-ready”, “100% FigJam”, “semua fitur berfungsi”, atau “semua test lolos” tanpa bukti.
+
+PENGINGAT TERAKHIR:
+
+Hierarki aplikasi adalah:
+
+WORKSPACE → PROJECT → BOARD
+
+Project langsung berisi board.
+Tidak ada folder atau subfolder.
+Klik board langsung membuka canvas editor.
+
+Mulai bekerja sekarang. Bangun, jalankan, uji, perbaiki, dan serahkan hasil nyata dalam sesi kerja ini. Jangan hanya mengembalikan rencana.

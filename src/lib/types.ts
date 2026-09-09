@@ -1,0 +1,9 @@
+export type Role='owner'|'editor'|'commenter'|'viewer';
+export interface User {id:string;name:string;email:string;color:string}
+export interface Workspace {id:string;name:string;role:Role;created_at?:string}
+export interface Project {id:string;workspace_id:string;name:string;description:string;color:string;icon:string;is_private?:boolean;role:Role;deleted_at?:string|null;created_at?:string}
+export interface Board {id:string;project_id:string;workspace_id?:string;workspace_name?:string;name:string;role:Role;project_name?:string;owner_name?:string;created_by?:string;created_at:string;updated_at:string;deleted_at?:string|null}
+export interface Page {id:string;name:string;order:number}
+export type ObjectType='sticky'|'rectangle'|'rounded'|'ellipse'|'diamond'|'triangle'|'text'|'connector'|'section'|'pen'|'image'|'table'|'stamp';
+export interface SceneObject {id:string;type:ObjectType;pageId:string;x:number;y:number;width:number;height:number;rotation:number;fill:string;stroke:string;strokeWidth:number;text:string;fontSize:number;bold:boolean;italic:boolean;align:'left'|'center'|'right';locked:boolean;opacity:number;order:number;groupId?:string;sectionId?:string;fromId?:string;toId?:string;fromX?:number;fromY?:number;toX?:number;toY?:number;routing?:string;curveOffset?:number;autoWidth?:boolean;radius?:number;points?:{x:number;y:number}[];assetId?:string;cells?:string[][];author?:string;showAuthor?:boolean;dashed?:boolean;arrowStart?:boolean;arrowEnd?:boolean;link?:string;[key:string]:unknown}
+export interface Presence {id:string;user:User;x?:number;y?:number;pageId?:string;selected?:string[];viewport?:{x:number;y:number;zoom:number};preview?:{id:string;x?:number;y?:number;width?:number;height?:number;rotation?:number}[];reaction?:{emoji:string;at:number};chat?:{text:string;at:number};spotlight?:boolean;updatedAt?:number}

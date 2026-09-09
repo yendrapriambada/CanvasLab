@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import {spawn,type ChildProcess} from 'node:child_process';
+import {createServer} from 'node:net';
+import {writeFile} from 'node:fs/promises';
+import {chromium} from 'playwright';
+import * as Y from 'yjs';
+import {base64ToBytes,createObject,pagesFromDoc,bytesToBase64} from '../src/lib/model';
+const free=createServer();await new Promise<void>(r=>free.listen(0,'127.0.0.1',r));const port=(free.address() as {port:number}).port;await new Promise<void>(r=>free.close(()=>r()));
+const base=`http://127.0.0.1:${port}`;let server:ChildProcess|undefined;
+async function start(){server=spawn(process.execPath,['--import','tsx','server/index.ts'],{env:{...process.env,NODE_ENV:'production',PORT:String(port)},stdio:'ignore'});const child=server;for(let i=0;i<100;i++){if(child.exitCode!==null)throw Error('Gateway did not start');try{const r=await fetch(`${base}/health`);if(r.ok)return child.pid}catch{}await new Promise(r=>setTimeout(r,100));}throw Error('Gateway startup timed out')}
+async function stop(){if(!server||server.exitCode!==null)return;const done=new Promise<void>(r=>server!.once('exit',()=>r()));server.kill('SIGTERM');await done;server=undefined}
+const browser=await chromium.launch();
+try{
+ const beforePid=await start();const c=await browser.newContext({baseURL:base,viewport:{width:1440,height:900}});const api=async(action:string,data:Record<string,unknown>={})=>{const r=await c.request.post('/api',{data:{action,...data}});const body=await r.json();assert.equal(r.status(),200,`${action}: ${JSON.stringify(body)}`);return body};
+ await api('auth.register',{name:'QA Restart',email:`qa-restart-${crypto.randomUUID()}@canvaslab.test`,password:crypto.randomUUID()});const dashboard=await api('dashboard');const board=(await api('board.create',{project_id:dashboard.projects[0].id,name:'QA Restart and image persistence'})).board;
+ const imageData='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aDCUAAAAASUVORK5CYII=';
+ const asset=(await api('asset.create',{board_id:board.id,name:'restart.png',mime:'image/png',data:imageData})).asset;
+ const doc=new Y.Doc();(await api('scene.load',{board_id:board.id})).updates.forEach((update:string)=>Y.applyUpdate(doc,base64ToBytes(update)));const pageId=pagesFromDoc(doc)[0].id;createObject(doc,{pageId,text:'Survives a complete gateway restart',x:100,y:180});createObject(doc,{pageId,type:'image',assetId:asset.id,x:400,y:180,width:100,height:100});await api('scene.push',{board_id:board.id,update_id:crypto.randomUUID(),update:bytesToBase64(Y.encodeStateAsUpdate(doc))});
+ const page=await c.newPage();await page.goto(`/board/${board.id}`);await page.getByText('Survives a complete gateway restart').waitFor();await page.getByText('All changes saved').waitFor({timeout:60000});await page.locator('svg image').waitFor();const saved=await api('board.export',{board_id:board.id}),cookies=await c.cookies();await c.close();await stop();const afterPid=await start();assert.notEqual(beforePid,afterPid);
+ const reopened=await browser.newContext({baseURL:base,viewport:{width:1440,height:900}});await reopened.addCookies(cookies);const p=await reopened.newPage();await p.goto(`/board/${board.id}`);await p.getByText('Survives a complete gateway restart').waitFor({timeout:60000});await p.getByText('All changes saved').waitFor({timeout:60000});await p.locator('svg image').waitFor();assert.equal(await p.locator('svg image').getAttribute('href'),`data:image/png;base64,${imageData}`);const response=await reopened.request.post('/api',{data:{action:'board.export',board_id:board.id}});assert.equal(response.status(),200);const restored=await response.json();assert.deepEqual(restored.objects,saved.objects);assert.deepEqual(restored.assets,saved.assets);await p.screenshot({path:'artifacts/server-restart.png'});await reopened.close();
+ await writeFile('artifacts/restart-persistence.json',JSON.stringify({status:'Passed',timestamp:new Date().toISOString(),differentGatewayProcess:true,objects:saved.objects.length,assets:saved.assets.length,checks:['Waited for server-saved status','Stopped the owned gateway process completely','Started a new production gateway process','Reopened the authenticated board','Verified object equality and exact PNG bytes']},null,2));console.log('PASS full gateway restart preserves saved scene and PNG asset');
+}finally{await browser.close();await stop()}

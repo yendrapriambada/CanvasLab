@@ -1,0 +1,21 @@
+import {test,expect} from '@playwright/test';
+import {writeFile} from 'node:fs/promises';
+test('registration, dashboard, board, real sticky text and persistence',async({page})=>{
+ const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('/');
+ await page.getByRole('button',{name:'Create an account',exact:true}).click();
+ const email=`qa-${Date.now()}@canvaslab.test`,password=`QA-${crypto.randomUUID()}`;
+ await page.getByLabel('Full name').fill('QA Khalifah');await page.getByLabel('Email address').fill(email);await page.getByLabel('Password',{exact:true}).fill(password);
+ await page.getByRole('button',{name:'Create your account'}).click();
+ await expect(page.getByRole('button',{name:'New board',exact:true})).toBeVisible({timeout:60000});
+ await expect(page.getByText('Gathering your ideas…')).toBeHidden();await page.screenshot({path:'artifacts/dashboard-workspace.png',fullPage:true});
+ await page.getByRole('button',{name:'New board',exact:true}).click();await page.getByLabel('Board name',{exact:true}).fill('QA · Workshop Digital Product');await page.getByRole('button',{name:'Create board',exact:true}).click();
+ await expect(page.getByLabel('Collaborative board canvas')).toBeVisible();await expect(page.getByText('All changes saved')).toBeVisible({timeout:60000});
+ await page.screenshot({path:'artifacts/blank-editor.png'});
+ await page.keyboard.press('s');await page.mouse.click(480,340);await expect(page.getByLabel('Edit object text')).toBeVisible();await page.getByLabel('Edit object text').fill('A real collaborative idea\nFor Khalifah');await page.keyboard.press('Escape');
+ await expect(page.getByText('All changes saved')).toBeVisible({timeout:60000});
+ await page.reload();await expect(page.getByText('A real collaborative idea',{exact:false})).toBeVisible({timeout:60000});
+ await expect(page.getByText('All changes saved')).toBeVisible();await expect(page.getByRole('button',{name:'QA · Workshop Digital Product',exact:true})).toBeVisible();await page.screenshot({path:'artifacts/sticky-editor.png'});
+ const cookie=await page.context().cookies();await writeFile('/tmp/canvaslab-qa-session.json',JSON.stringify({email,password,cookies:cookie,boardId:page.url().split('/').pop()}));
+ expect(errors).toEqual([]);
+});

@@ -1,0 +1,8 @@
+{
+  "imports": {
+    "postgres": "npm:postgres@3.4.7",
+    "yjs": "npm:yjs@13.6.32",
+    "jose": "npm:jose@6.2.12"
+  },
+  "compilerOptions": { "strict": true }
+}
