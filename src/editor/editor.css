@@ -750,15 +750,20 @@
   align-items: center;
   gap: 4px;
   color: #857aa0;
-  padding: 0 2px;
+  padding: 0 4px;
 }
-.corner-radius-field input {
-  width: 34px;
+/* Specificity fight with the app-wide `input:not([type=...])` reset (which
+   sets a 10px/12px padding meant for full-size form fields) - scope through
+   .board-editor so this compact toolbar field actually wins it. */
+.board-editor .corner-radius-field input[type="number"] {
+  width: 30px;
   border: 0;
+  border-radius: 4px;
   background: none;
   font-size: 11px;
   color: #51455f;
-  padding: 4px 0;
+  padding: 4px;
+  margin: 2px;
   -moz-appearance: textfield;
 }
 .corner-radius-field input::-webkit-outer-spin-button,

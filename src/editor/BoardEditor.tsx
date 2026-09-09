@@ -91,6 +91,7 @@ import {
   connectorRoutePoints,
   curveBendPoint,
   curveOffsetFromPoint,
+  dragConnectorSegment,
 } from "./geometry";
 import type { ConnectorAnchor } from "./geometry";
 import "./editor.css";
@@ -126,7 +127,12 @@ type Interaction =
       additive: boolean;
       base: string[];
     }
-  | { kind: "drag"; start: Point; items: SceneObject[] }
+  | {
+      kind: "drag";
+      start: Point;
+      items: SceneObject[];
+      toggleOffId?: string;
+    }
   | { kind: "resize"; start: Point; item: SceneObject; handle: string }
   | { kind: "rotate"; start: Point; item: SceneObject; angle: number }
   | { kind: "draw"; points: Point[]; highlighter: boolean }
@@ -141,7 +147,14 @@ type Interaction =
   | { kind: "endpoint"; id: string; end: "from" | "to"; current: Point }
   | { kind: "bend"; id: string; index: number; current: Point }
   | { kind: "radius"; item: SceneObject; corner: "nw" | "ne" | "sw" | "se" }
-  | { kind: "connector-bend"; id: string; index: number };
+  | {
+      kind: "connector-segment";
+      id: string;
+      segmentIndex: number;
+      axis: "x" | "y";
+      baseRoute: Point[];
+      baseBends: Point[];
+    };
 const GRID_SIZE = 20;
 const COLORS = [
   "#ffe48b",
@@ -365,6 +378,10 @@ export default function BoardEditor({
     point: Point;
   } | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
+  const [hoverAnchor, setHoverAnchor] = useState<{
+    id: string;
+    side: ConnectorAnchor;
+  } | null>(null);
   const [guides, setGuides] = useState<{ x?: number; y?: number }>({});
   const [pageMenu, setPageMenu] = useState(false);
   const pageCameras = useRef(new Map<string, Camera>());
@@ -1696,27 +1713,27 @@ export default function BoardEditor({
           item: one,
           corner: handle.slice(7) as "nw" | "ne" | "sw" | "se",
         });
-      else if (handle.startsWith("bend-point-")) {
-        const index = +handle.slice(11);
-        const route = connectorRoutePoints(one, allObjects);
-        // The first drag of an auto-routed connector adopts its current
-        // route as the manual baseline, so nothing jumps under the cursor.
-        if (!one.bends || one.bends.length !== route.length - 2)
-          mutate(() => updateObject(one.id, { bends: route.slice(1, -1) }));
-        setInteraction({ kind: "connector-bend", id: one.id, index });
-      } else if (handle.startsWith("bend-mid-")) {
-        const segment = +handle.slice(9);
-        const route = connectorRoutePoints(one, allObjects);
-        const baseline =
-          one.bends && one.bends.length === route.length - 2
-            ? [...one.bends]
-            : route.slice(1, -1);
-        baseline.splice(segment, 0, {
-          x: (route[segment].x + route[segment + 1].x) / 2,
-          y: (route[segment].y + route[segment + 1].y) / 2,
+      else if (handle.startsWith("bend-mid-")) {
+        // Drag the whole straight run, not a single point: the segment
+        // slides perpendicular to itself and the neighbouring segments
+        // stretch to match - never a free-floating diagonal kink.
+        const segmentIndex = +handle.slice(9);
+        const baseRoute = connectorRoutePoints(one, allObjects);
+        const baseBends =
+          one.bends && one.bends.length === baseRoute.length - 2
+            ? one.bends
+            : baseRoute.slice(1, -1);
+        const a = baseRoute[segmentIndex],
+          b = baseRoute[segmentIndex + 1];
+        const axis: "x" | "y" = Math.abs(a.y - b.y) < 0.5 ? "y" : "x";
+        setInteraction({
+          kind: "connector-segment",
+          id: one.id,
+          segmentIndex,
+          axis,
+          baseRoute,
+          baseBends,
         });
-        mutate(() => updateObject(one.id, { bends: baseline }));
-        setInteraction({ kind: "connector-bend", id: one.id, index: segment });
       }
       else if (handle === "rotate")
         setInteraction({
@@ -1777,6 +1794,27 @@ export default function BoardEditor({
       setInteraction({ kind: "create", type: tool, start: p, current: p });
       return;
     }
+    const soleSelection =
+      selected.length === 1 && !!hit && selected[0] === hit.id;
+    if (
+      hit?.type === "section" &&
+      !e.shiftKey &&
+      !soleSelection &&
+      !hit.locked &&
+      canEdit
+    ) {
+      // An unselected frame's empty background starts a marquee over its
+      // contents, not a move - select the frame outright by clicking it
+      // without dragging, or drag its already-selected self to move it.
+      setInteraction({
+        kind: "marquee",
+        start: p,
+        current: p,
+        additive: false,
+        base: [],
+      });
+      return;
+    }
     if (hit) {
       const ids = e.shiftKey
         ? selected.includes(hit.id)
@@ -1794,7 +1832,17 @@ export default function BoardEditor({
           duplicate(items, { x: 0, y: 0 });
           return;
         }
-        setInteraction({ kind: "drag", start: p, items });
+        setInteraction({
+          kind: "drag",
+          start: p,
+          items,
+          // A plain click (no real drag) on an already-selected frame
+          // toggles it back off, like clicking empty canvas would.
+          toggleOffId:
+            hit.type === "section" && soleSelection && !e.shiftKey
+              ? hit.id
+              : undefined,
+        });
       }
     } else {
       const base = e.shiftKey ? selected : [];
@@ -2046,13 +2094,15 @@ export default function BoardEditor({
       setPreview({ [o.id]: { radius: Math.round(radius) } });
       return;
     }
-    if (interaction.kind === "connector-bend") {
-      const o = allObjects.find((v) => v.id === interaction.id);
-      if (o?.bends) {
-        const bends = [...o.bends];
-        bends[interaction.index] = p;
-        setPreview({ [o.id]: { bends } });
-      }
+    if (interaction.kind === "connector-segment") {
+      const bends = dragConnectorSegment(
+        interaction.baseRoute,
+        interaction.baseBends,
+        interaction.segmentIndex,
+        interaction.axis,
+        interaction.axis === "y" ? p.y : p.x,
+      );
+      setPreview({ [interaction.id]: { bends } });
       return;
     }
     if (tool === "eraser" && e.buttons === 1 && canEdit) {
@@ -2113,7 +2163,27 @@ export default function BoardEditor({
       ]);
     }
     if (
-      ["drag", "resize", "rotate", "bend", "radius", "connector-bend"].includes(
+      interaction.kind === "drag" &&
+      interaction.toggleOffId &&
+      Math.hypot(p.x - interaction.start.x, p.y - interaction.start.y) *
+        camera.zoom <
+        3
+    ) {
+      // No real drag happened - this was just a second click on an
+      // already-selected frame, so toggle its selection off.
+      setSelected([]);
+      setPreview({});
+      setInteraction(emptyInteraction);
+      setGuides({});
+      try {
+        svgRef.current?.releasePointerCapture(e.pointerId);
+      } catch {
+        /* Pointer may already be released. */
+      }
+      return;
+    }
+    if (
+      ["drag", "resize", "rotate", "bend", "radius", "connector-segment"].includes(
         interaction.kind,
       ) &&
       Object.keys(preview).length
@@ -2358,34 +2428,46 @@ export default function BoardEditor({
           routing: "elbow",
         })
       : null;
-  // Dragging a quick-connect handle out to empty canvas (no shape nearby to
-  // snap to) previews the same-type shape it will create on release - the
-  // FigJam "drag a + handle into empty space" ghost.
+  // Previews the same-type shape a quick-connect drag will create on
+  // release, positioned exactly where quickConnect() itself would place it -
+  // the FigJam "drag/hover a + handle toward empty space" ghost.
+  const previewQuickConnectShape = (source: SceneObject, side: ConnectorAnchor) => {
+    const from = shapeAnchorPoint(source, side),
+      middle = { x: source.x + source.width / 2, y: source.y + source.height / 2 };
+    const magnitude = Math.hypot(from.x - middle.x, from.y - middle.y) || 1,
+      direction = {
+        x: (from.x - middle.x) / magnitude,
+        y: (from.y - middle.y) / magnitude,
+      };
+    const distance =
+      Math.abs(direction.x) * source.width +
+      Math.abs(direction.y) * source.height +
+      100;
+    return draftObject(
+      source.type as Tool,
+      {
+        x: source.x + direction.x * distance,
+        y: source.y + direction.y * distance,
+      },
+      { width: source.width, height: source.height, fill: source.fill, stroke: source.stroke },
+    );
+  };
   const quickConnectGhost =
     interaction.kind === "connect" && interaction.fromAnchor && !connectorTarget
       ? (() => {
           const source = pageObjects.find((o) => o.id === interaction.fromId);
-          if (!source) return null;
-          const from = shapeAnchorPoint(source, interaction.fromAnchor),
-            middle = {
-              x: source.x + source.width / 2,
-              y: source.y + source.height / 2,
-            };
-          const magnitude = Math.hypot(from.x - middle.x, from.y - middle.y) || 1,
-            direction = {
-              x: (from.x - middle.x) / magnitude,
-              y: (from.y - middle.y) / magnitude,
-            };
-          const distance =
-            Math.abs(direction.x) * source.width +
-            Math.abs(direction.y) * source.height +
-            100;
-          return draftObject(source.type as Tool, {
-            x: source.x + direction.x * distance,
-            y: source.y + direction.y * distance,
-          }, { width: source.width, height: source.height, fill: source.fill, stroke: source.stroke });
+          return source
+            ? previewQuickConnectShape(source, interaction.fromAnchor)
+            : null;
         })()
-      : null;
+      : interaction.kind === "idle" && hoverAnchor
+        ? (() => {
+            const source = pageObjects.find((o) => o.id === hoverAnchor.id);
+            return source
+              ? previewQuickConnectShape(source, hoverAnchor.side)
+              : null;
+          })()
+        : null;
   const handleObject =
     !editing && tool === "select" && interaction.kind === "idle"
       ? pageObjects.find((o) => o.id === hovered) || one
@@ -2608,6 +2690,34 @@ export default function BoardEditor({
           )}
           {quickConnectGhost && (
             <g className="object-draft" pointerEvents="none">
+              {(() => {
+                const side =
+                  interaction.kind === "connect"
+                    ? interaction.fromAnchor
+                    : hoverAnchor?.side;
+                const sourceId =
+                  interaction.kind === "connect"
+                    ? interaction.fromId
+                    : hoverAnchor?.id;
+                const source = pageObjects.find((o) => o.id === sourceId);
+                if (!source || !side) return null;
+                const from = shapeAnchorPoint(source, side);
+                const to = {
+                  x: quickConnectGhost.x + quickConnectGhost.width / 2,
+                  y: quickConnectGhost.y + quickConnectGhost.height / 2,
+                };
+                return (
+                  <line
+                    x1={from.x}
+                    y1={from.y}
+                    x2={to.x}
+                    y2={to.y}
+                    stroke="#0d99ff"
+                    strokeDasharray={`${5 / camera.zoom} ${4 / camera.zoom}`}
+                    strokeWidth={1.5 / camera.zoom}
+                  />
+                );
+              })()}
               <SceneView o={quickConnectGhost} all={allObjects} />
               <rect
                 x={quickConnectGhost.x}
@@ -2864,6 +2974,16 @@ export default function BoardEditor({
                       aria-label={`Connect from ${side}`}
                       tabIndex={0}
                       transform={`translate(${x} ${y}) scale(${1 / camera.zoom})`}
+                      onPointerEnter={() =>
+                        setHoverAnchor({ id: handleObject.id, side })
+                      }
+                      onPointerLeave={() =>
+                        setHoverAnchor((v) =>
+                          v?.id === handleObject.id && v.side === side
+                            ? null
+                            : v,
+                        )
+                      }
                       onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === " ") {
                           e.preventDefault();
@@ -2945,7 +3065,10 @@ export default function BoardEditor({
                 <g>
                   {route.slice(0, -1).map((p, i) => {
                     const q = route[i + 1],
-                      mid = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
+                      mid = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 },
+                      // A horizontal run only slides vertically, and vice
+                      // versa - the resize-handle cursor convention.
+                      horizontal = Math.abs(p.y - q.y) < 0.5;
                     return (
                       <circle
                         key={`mid-${i}`}
@@ -2957,7 +3080,7 @@ export default function BoardEditor({
                         stroke="white"
                         strokeWidth={1.5 / camera.zoom}
                         opacity={0.85}
-                        style={{ cursor: "pointer" }}
+                        style={{ cursor: horizontal ? "ns-resize" : "ew-resize" }}
                       />
                     );
                   })}
@@ -2971,7 +3094,7 @@ export default function BoardEditor({
                       fill="white"
                       stroke="#0d99ff"
                       strokeWidth={2 / camera.zoom}
-                      style={{ cursor: "grab" }}
+                      style={{ cursor: "pointer" }}
                     />
                   ))}
                 </g>
@@ -3631,36 +3754,81 @@ export default function BoardEditor({
             {COLORS.slice(0, 6).map((color) => (
               <button
                 key={color}
-                title={`Fill ${color}`}
-                aria-label={`Fill ${color}`}
-                className={one?.fill === color ? "picked" : ""}
+                title={`${one?.type === "connector" ? "Stroke" : "Fill"} ${color}`}
+                aria-label={`${one?.type === "connector" ? "Stroke" : "Fill"} ${color}`}
+                className={
+                  (one?.type === "connector" ? one?.stroke : one?.fill) ===
+                  color
+                    ? "picked"
+                    : ""
+                }
                 style={{ background: color }}
                 onClick={() => {
-                  setFill(color);
-                  patchSelected({ fill: color });
+                  if (one?.type === "connector") {
+                    setStroke(color);
+                    patchSelected({ stroke: color });
+                  } else {
+                    setFill(color);
+                    patchSelected({ fill: color });
+                  }
                 }}
               />
             ))}
           </div>
-          <label className="custom-color" title="Custom fill">
+          <label
+            className="custom-color"
+            title={one?.type === "connector" ? "Custom stroke" : "Custom fill"}
+          >
             <input
               type="color"
-              aria-label="Custom fill color"
-              value={/^#[0-9a-f]{6}$/i.test(one?.fill || "") ? one!.fill : fill}
+              aria-label={
+                one?.type === "connector"
+                  ? "Custom stroke color"
+                  : "Custom fill color"
+              }
+              value={
+                one?.type === "connector"
+                  ? /^#[0-9a-f]{6}$/i.test(one?.stroke || "")
+                    ? one!.stroke
+                    : stroke
+                  : /^#[0-9a-f]{6}$/i.test(one?.fill || "")
+                    ? one!.fill
+                    : fill
+              }
               onChange={(e) => {
-                setFill(e.target.value);
-                patchSelected({ fill: e.target.value });
+                if (one?.type === "connector") {
+                  setStroke(e.target.value);
+                  patchSelected({ stroke: e.target.value });
+                } else {
+                  setFill(e.target.value);
+                  patchSelected({ fill: e.target.value });
+                }
               }}
             />
             <span>+</span>
           </label>
-          <IconButton
-            label="More colors"
-            active={menu === "palette"}
-            onClick={() => setMenu(menu === "palette" ? null : "palette")}
+          <button
+            type="button"
+            title="More colors"
+            aria-label="More colors"
+            aria-pressed={menu === "palette"}
+            className={`editor-icon ${menu === "palette" ? "is-active" : ""}`}
+            onClick={(e) => {
+              if (menu === "palette") {
+                setMenu(null);
+                return;
+              }
+              const r = e.currentTarget.getBoundingClientRect(),
+                root = rootRef.current!.getBoundingClientRect();
+              setMoreMenuPos({
+                x: Math.min(r.left - root.left, size.width - 260),
+                y: Math.min(r.bottom - root.top + 6, size.height - 260),
+              });
+              setMenu("palette");
+            }}
           >
             <ChevronDown size={13} />
-          </IconButton>
+          </button>
           <span className="toolbar-divider" />
           <select
             aria-label="Font size"
@@ -3706,6 +3874,54 @@ export default function BoardEditor({
               <AlignCenter size={16} />
             )}
           </IconButton>
+          {one?.type === "connector" && (
+            <>
+              <span className="toolbar-divider" />
+              <IconButton
+                label={
+                  one.dashed ? "Solid line style" : "Dashed line style"
+                }
+                active={!!one.dashed}
+                onClick={() =>
+                  patchSelected({ dashed: !one.dashed } as any)
+                }
+              >
+                <Minus size={16} />
+              </IconButton>
+              <IconButton
+                label={`Line routing: ${one.routing || "elbow"} (click to change)`}
+                onClick={() =>
+                  patchSelected({
+                    routing:
+                      one.routing === "elbow"
+                        ? "straight"
+                        : one.routing === "curve"
+                          ? "elbow"
+                          : "curve",
+                    curveOffset:
+                      one.routing === "straight"
+                        ? (one.curveOffset ?? 60)
+                        : one.curveOffset,
+                  })
+                }
+              >
+                <GitBranch size={16} />
+              </IconButton>
+              <IconButton
+                label={
+                  (one as any).arrow === false
+                    ? "No arrowhead (click to add)"
+                    : "Arrowhead (click to remove)"
+                }
+                active={(one as any).arrow !== false}
+                onClick={() =>
+                  patchSelected({ arrow: (one as any).arrow === false } as any)
+                }
+              >
+                <ArrowRight size={16} />
+              </IconButton>
+            </>
+          )}
           {one && RADIUS_TYPES.includes(one.type) && (
             <>
               <span className="toolbar-divider" />
@@ -3750,18 +3966,35 @@ export default function BoardEditor({
         </div>
       )}
       {menu === "palette" && (
-        <div className="editor-popover color-palette-menu">
+        <div
+          className="editor-popover color-palette-menu"
+          style={
+            moreMenuPos
+              ? { left: moreMenuPos.x, top: moreMenuPos.y, bottom: "auto", transform: "none" }
+              : undefined
+          }
+        >
           <div className="color-palette-grid">
             {FIGMA_PALETTE.map((color, i) => (
               <button
                 key={`${color}-${i}`}
-                title={`Fill ${color}`}
-                aria-label={`Fill ${color}`}
-                className={one?.fill === color ? "picked" : ""}
+                title={`${one?.type === "connector" ? "Stroke" : "Fill"} ${color}`}
+                aria-label={`${one?.type === "connector" ? "Stroke" : "Fill"} ${color}`}
+                className={
+                  (one?.type === "connector" ? one?.stroke : one?.fill) ===
+                  color
+                    ? "picked"
+                    : ""
+                }
                 style={{ background: color }}
                 onClick={() => {
-                  setFill(color);
-                  patchSelected({ fill: color });
+                  if (one?.type === "connector") {
+                    setStroke(color);
+                    patchSelected({ stroke: color });
+                  } else {
+                    setFill(color);
+                    patchSelected({ fill: color });
+                  }
                   setMenu(null);
                 }}
               />
@@ -3772,13 +4005,24 @@ export default function BoardEditor({
             >
               <input
                 type="color"
-                aria-label="Custom fill color"
+                aria-label="Custom color"
                 value={
-                  /^#[0-9a-f]{6}$/i.test(one?.fill || "") ? one!.fill : fill
+                  one?.type === "connector"
+                    ? /^#[0-9a-f]{6}$/i.test(one?.stroke || "")
+                      ? one!.stroke
+                      : stroke
+                    : /^#[0-9a-f]{6}$/i.test(one?.fill || "")
+                      ? one!.fill
+                      : fill
                 }
                 onChange={(e) => {
-                  setFill(e.target.value);
-                  patchSelected({ fill: e.target.value });
+                  if (one?.type === "connector") {
+                    setStroke(e.target.value);
+                    patchSelected({ stroke: e.target.value });
+                  } else {
+                    setFill(e.target.value);
+                    patchSelected({ fill: e.target.value });
+                  }
                 }}
               />
               <span />

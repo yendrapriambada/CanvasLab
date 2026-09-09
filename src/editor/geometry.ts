@@ -270,6 +270,36 @@ export function curveOffsetFromPoint(a:Point,b:Point,p:Point):number {
  const nx=-dy/len,ny=dx/len;
  return (p.x-(a.x+b.x)/2)*nx+(p.y-(a.y+b.y)/2)*ny;
 }
+/**
+ * Move one straight run of a manually-bent elbow connector perpendicular to
+ * itself - the neighbouring segments simply get longer or shorter to absorb
+ * the change, exactly like dragging a segment of a FigJam connector. A
+ * segment touching one of the connector's own endpoints gets a short
+ * perpendicular lead inserted first, since that endpoint is anchored to a
+ * shape and can never move itself.
+ */
+export function dragConnectorSegment(route:Point[],bends:Point[],segmentIndex:number,axis:'x'|'y',value:number):Point[] {
+ const n=route.length;
+ const touchesStart=segmentIndex===0,touchesEnd=segmentIndex===n-2;
+ const make=(primary:number,secondary:number):Point=>axis==='x'?{x:primary,y:secondary}:{x:secondary,y:primary};
+ const secondaryOf=(p:Point)=>axis==='x'?p.y:p.x;
+ if(touchesStart&&touchesEnd){
+  const a=route[0],b=route[1];
+  return [make(value,secondaryOf(a)),make(value,secondaryOf(b))];
+ }
+ if(touchesStart){
+  const a=route[0],target=route[1];
+  return [make(value,secondaryOf(a)),make(value,secondaryOf(target)),...bends];
+ }
+ if(touchesEnd){
+  const a=route[n-1],target=route[n-2];
+  return [...bends,make(value,secondaryOf(target)),make(value,secondaryOf(a))];
+ }
+ const out=[...bends];
+ out[segmentIndex-1]={...out[segmentIndex-1],[axis]:value};
+ out[segmentIndex]={...out[segmentIndex],[axis]:value};
+ return out;
+}
 export function routedConnectorPath(o:SceneObject,all:SceneObject[]):string {
  if(o.routing==='curve'){
   const [a,b]=connectorPoints(o,all);
