@@ -1559,7 +1559,9 @@ export default function BoardEditor({
     setTool("select");
     setHovered(null);
   };
-  const quickConnect = (source: SceneObject, side: ConnectorAnchor) => {
+  // Shared by the real action and its hover/drag preview, so the ghost
+  // shown is always exactly what quickConnect() will actually do.
+  const findQuickConnectTarget = (source: SceneObject, side: ConnectorAnchor) => {
     const from = shapeAnchorPoint(source, side),
       middle = {
         x: source.x + source.width / 2,
@@ -1592,6 +1594,10 @@ export default function BoardEditor({
           v.across < Math.max(source.width, source.height) * 0.7,
       )
       .sort((a, b) => a.along + a.across * 2 - (b.along + b.across * 2))[0];
+    return { from, direction, target };
+  };
+  const quickConnect = (source: SceneObject, side: ConnectorAnchor) => {
+    const { from, direction, target } = findQuickConnectTarget(source, side);
     live.stopCapturing();
     mutate(() => {
       if (target) {
@@ -2428,46 +2434,59 @@ export default function BoardEditor({
           routing: "elbow",
         })
       : null;
-  // Previews the same-type shape a quick-connect drag will create on
-  // release, positioned exactly where quickConnect() itself would place it -
-  // the FigJam "drag/hover a + handle toward empty space" ghost.
-  const previewQuickConnectShape = (source: SceneObject, side: ConnectorAnchor) => {
-    const from = shapeAnchorPoint(source, side),
-      middle = { x: source.x + source.width / 2, y: source.y + source.height / 2 };
-    const magnitude = Math.hypot(from.x - middle.x, from.y - middle.y) || 1,
-      direction = {
-        x: (from.x - middle.x) / magnitude,
-        y: (from.y - middle.y) / magnitude,
+  // Previews what a quick-connect drag/hover will actually do on release -
+  // a ghost of the same-type shape it'll create when aimed at empty space,
+  // or (reusing the exact same target search quickConnect() itself runs) a
+  // highlight on the existing shape it will snap to instead, so the ghost
+  // never gets drawn sitting right on top of a real shape that's already
+  // there.
+  const previewQuickConnect = (source: SceneObject, side: ConnectorAnchor) => {
+    const { from, direction, target } = findQuickConnectTarget(source, side);
+    if (target) {
+      return {
+        ghost: null,
+        target: target.o,
+        point: shapeAnchorPoint(
+          target.o,
+          ANCHORS[(ANCHORS.indexOf(side) + 2) % 4],
+        ),
       };
+    }
     const distance =
       Math.abs(direction.x) * source.width +
       Math.abs(direction.y) * source.height +
       100;
-    return draftObject(
-      source.type as Tool,
-      {
-        x: source.x + direction.x * distance,
-        y: source.y + direction.y * distance,
-      },
-      { width: source.width, height: source.height, fill: source.fill, stroke: source.stroke },
-    );
+    return {
+      ghost: draftObject(
+        source.type as Tool,
+        {
+          x: source.x + direction.x * distance,
+          y: source.y + direction.y * distance,
+        },
+        { width: source.width, height: source.height, fill: source.fill, stroke: source.stroke },
+      ),
+      target: null,
+      point: from,
+    };
   };
-  const quickConnectGhost =
+  const quickConnectPreview =
     interaction.kind === "connect" && interaction.fromAnchor && !connectorTarget
       ? (() => {
           const source = pageObjects.find((o) => o.id === interaction.fromId);
           return source
-            ? previewQuickConnectShape(source, interaction.fromAnchor)
+            ? previewQuickConnect(source, interaction.fromAnchor)
             : null;
         })()
       : interaction.kind === "idle" && hoverAnchor
         ? (() => {
             const source = pageObjects.find((o) => o.id === hoverAnchor.id);
             return source
-              ? previewQuickConnectShape(source, hoverAnchor.side)
+              ? previewQuickConnect(source, hoverAnchor.side)
               : null;
           })()
         : null;
+  const quickConnectGhost = quickConnectPreview?.ghost ?? null;
+  const quickConnectHoverTarget = quickConnectPreview?.target ?? null;
   const handleObject =
     !editing && tool === "select" && interaction.kind === "idle"
       ? pageObjects.find((o) => o.id === hovered) || one
@@ -2731,6 +2750,22 @@ export default function BoardEditor({
                 strokeWidth={1.5 / camera.zoom}
               />
             </g>
+          )}
+          {!quickConnectGhost && quickConnectHoverTarget && (
+            // Hovering toward a shape that's already there: highlight it
+            // instead of drawing a ghost that would just sit on top of it.
+            <rect
+              pointerEvents="none"
+              x={quickConnectHoverTarget.x - 5 / camera.zoom}
+              y={quickConnectHoverTarget.y - 5 / camera.zoom}
+              width={quickConnectHoverTarget.width + 10 / camera.zoom}
+              height={quickConnectHoverTarget.height + 10 / camera.zoom}
+              rx={16 / camera.zoom}
+              fill="#0d99ff0a"
+              stroke="#0d99ff"
+              strokeWidth={1.5 / camera.zoom}
+              strokeDasharray={`${5 / camera.zoom} ${4 / camera.zoom}`}
+            />
           )}
           {guides.x !== undefined && (
             <line
