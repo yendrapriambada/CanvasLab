@@ -140,7 +140,8 @@ type Interaction =
     }
   | { kind: "endpoint"; id: string; end: "from" | "to"; current: Point }
   | { kind: "bend"; id: string; index: number; current: Point }
-  | { kind: "radius"; item: SceneObject; corner: "nw" | "ne" | "sw" | "se" };
+  | { kind: "radius"; item: SceneObject; corner: "nw" | "ne" | "sw" | "se" }
+  | { kind: "connector-bend"; id: string; index: number };
 const GRID_SIZE = 20;
 const COLORS = [
   "#ffe48b",
@@ -1689,6 +1690,28 @@ export default function BoardEditor({
           item: one,
           corner: handle.slice(7) as "nw" | "ne" | "sw" | "se",
         });
+      else if (handle.startsWith("bend-point-")) {
+        const index = +handle.slice(11);
+        const route = connectorRoutePoints(one, allObjects);
+        // The first drag of an auto-routed connector adopts its current
+        // route as the manual baseline, so nothing jumps under the cursor.
+        if (!one.bends || one.bends.length !== route.length - 2)
+          mutate(() => updateObject(one.id, { bends: route.slice(1, -1) }));
+        setInteraction({ kind: "connector-bend", id: one.id, index });
+      } else if (handle.startsWith("bend-mid-")) {
+        const segment = +handle.slice(9);
+        const route = connectorRoutePoints(one, allObjects);
+        const baseline =
+          one.bends && one.bends.length === route.length - 2
+            ? [...one.bends]
+            : route.slice(1, -1);
+        baseline.splice(segment, 0, {
+          x: (route[segment].x + route[segment + 1].x) / 2,
+          y: (route[segment].y + route[segment + 1].y) / 2,
+        });
+        mutate(() => updateObject(one.id, { bends: baseline }));
+        setInteraction({ kind: "connector-bend", id: one.id, index: segment });
+      }
       else if (handle === "rotate")
         setInteraction({
           kind: "rotate",
@@ -2015,6 +2038,15 @@ export default function BoardEditor({
       setPreview({ [o.id]: { radius: Math.round(radius) } });
       return;
     }
+    if (interaction.kind === "connector-bend") {
+      const o = allObjects.find((v) => v.id === interaction.id);
+      if (o?.bends) {
+        const bends = [...o.bends];
+        bends[interaction.index] = p;
+        setPreview({ [o.id]: { bends } });
+      }
+      return;
+    }
     if (tool === "eraser" && e.buttons === 1 && canEdit) {
       const hit = hitObject(e.target, p);
       if (hit && !hit.locked) deleteObjects([hit.id]);
@@ -2073,7 +2105,7 @@ export default function BoardEditor({
       ]);
     }
     if (
-      ["drag", "resize", "rotate", "bend", "radius"].includes(
+      ["drag", "resize", "rotate", "bend", "radius", "connector-bend"].includes(
         interaction.kind,
       ) &&
       Object.keys(preview).length
@@ -2318,6 +2350,34 @@ export default function BoardEditor({
           routing: "elbow",
         })
       : null;
+  // Dragging a quick-connect handle out to empty canvas (no shape nearby to
+  // snap to) previews the same-type shape it will create on release - the
+  // FigJam "drag a + handle into empty space" ghost.
+  const quickConnectGhost =
+    interaction.kind === "connect" && interaction.fromAnchor && !connectorTarget
+      ? (() => {
+          const source = pageObjects.find((o) => o.id === interaction.fromId);
+          if (!source) return null;
+          const from = shapeAnchorPoint(source, interaction.fromAnchor),
+            middle = {
+              x: source.x + source.width / 2,
+              y: source.y + source.height / 2,
+            };
+          const magnitude = Math.hypot(from.x - middle.x, from.y - middle.y) || 1,
+            direction = {
+              x: (from.x - middle.x) / magnitude,
+              y: (from.y - middle.y) / magnitude,
+            };
+          const distance =
+            Math.abs(direction.x) * source.width +
+            Math.abs(direction.y) * source.height +
+            100;
+          return draftObject(source.type as Tool, {
+            x: source.x + direction.x * distance,
+            y: source.y + direction.y * distance,
+          }, { width: source.width, height: source.height, fill: source.fill, stroke: source.stroke });
+        })()
+      : null;
   const handleObject =
     !editing && tool === "select" && interaction.kind === "idle"
       ? pageObjects.find((o) => o.id === hovered) || one
@@ -2427,13 +2487,27 @@ export default function BoardEditor({
           pinch.current = null;
         }}
         onDoubleClick={(e) => {
+          // The first click of the pair already put pointer capture on this
+          // <svg> (see pointerDown), and per spec that also redirects the
+          // target of compatibility mouse events like this one - so e.target
+          // is always the <svg>, never whatever is drawn under the cursor
+          // (including a data-handle on a child, whose own onDoubleClick
+          // would never fire). Do a real hit-test instead.
+          const real = document.elementFromPoint(e.clientX, e.clientY);
+          const bendHandle = (real as Element)
+            ?.closest?.("[data-handle^='bend-point-']")
+            ?.getAttribute("data-handle");
+          if (bendHandle && one?.type === "connector") {
+            const index = +bendHandle.slice(11);
+            const route = connectorRoutePoints(one, allObjects);
+            const bends = (one.bends ?? route.slice(1, -1)).filter(
+              (_, i) => i !== index,
+            );
+            updateObject(one.id, { bends });
+            return;
+          }
           const p = world({ x: e.clientX, y: e.clientY }),
-            // The first click of the pair already put pointer capture on
-            // this <svg> (see pointerDown), and per spec that also redirects
-            // the target of compatibility mouse events like this one - so
-            // e.target is always the <svg>, never whatever is drawn under
-            // the cursor. Do a real hit-test instead.
-            hit = hitObject(document.elementFromPoint(e.clientX, e.clientY), p);
+            hit = hitObject(real, p);
           // A double-click on a frame resizes it to hug its contents,
           // rather than opening a text editor - matching how it reads on an
           // empty patch of canvas too (no more implicit text creation).
@@ -2522,6 +2596,22 @@ export default function BoardEditor({
               <text textAnchor="middle" y="4" fill="white" fontSize="11">
                 {Math.round(draft.width)} × {Math.round(draft.height)}
               </text>
+            </g>
+          )}
+          {quickConnectGhost && (
+            <g className="object-draft" pointerEvents="none">
+              <SceneView o={quickConnectGhost} all={allObjects} />
+              <rect
+                x={quickConnectGhost.x}
+                y={quickConnectGhost.y}
+                width={quickConnectGhost.width}
+                height={quickConnectGhost.height}
+                rx="6"
+                fill="none"
+                stroke="#0d99ff"
+                strokeDasharray={`${5 / camera.zoom} ${4 / camera.zoom}`}
+                strokeWidth={1.5 / camera.zoom}
+              />
             </g>
           )}
           {guides.x !== undefined && (
@@ -2834,6 +2924,49 @@ export default function BoardEditor({
                   strokeWidth={2 / camera.zoom}
                   style={{ cursor: "grab" }}
                 />
+              );
+            })()}
+          {one &&
+            one.type === "connector" &&
+            one.routing === "elbow" &&
+            canEdit &&
+            !one.locked &&
+            (() => {
+              const route = connectorRoutePoints(one, allObjects);
+              return (
+                <g>
+                  {route.slice(0, -1).map((p, i) => {
+                    const q = route[i + 1],
+                      mid = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
+                    return (
+                      <circle
+                        key={`mid-${i}`}
+                        data-handle={`bend-mid-${i}`}
+                        cx={mid.x}
+                        cy={mid.y}
+                        r={4 / camera.zoom}
+                        fill="#0d99ff"
+                        stroke="white"
+                        strokeWidth={1.5 / camera.zoom}
+                        opacity={0.85}
+                        style={{ cursor: "pointer" }}
+                      />
+                    );
+                  })}
+                  {route.slice(1, -1).map((p, i) => (
+                    <circle
+                      key={`point-${i}`}
+                      data-handle={`bend-point-${i}`}
+                      cx={p.x}
+                      cy={p.y}
+                      r={5 / camera.zoom}
+                      fill="white"
+                      stroke="#0d99ff"
+                      strokeWidth={2 / camera.zoom}
+                      style={{ cursor: "grab" }}
+                    />
+                  ))}
+                </g>
               );
             })()}
           {selectedObjects.length > 1 && selectionBox && (

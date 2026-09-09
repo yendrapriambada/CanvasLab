@@ -175,6 +175,10 @@ function gridRoute(start:Point,end:Point,obstacles:Obstacle[],relevant:Obstacle[
 function calculateConnectorRoute(o:SceneObject,all:SceneObject[]):Point[]{
  const [start,end]=connectorPoints(o,all);
  if(o.routing!=='elbow')return [start,end];
+ // A manually-bent connector (dragged like FigJam's editable elbow line)
+ // keeps exactly the points the user placed - skip the auto-router/obstacle
+ // avoidance entirely so their routing is never second-guessed.
+ if(o.bends&&o.bends.length)return cleanRoute([start,...o.bends,end]);
  const padding=Math.max(16,(o.strokeWidth||2)*2+8);
  const source=all.find(v=>v.id===o.fromId),target=all.find(v=>v.id===o.toId);
  const exit=exitPoint(source,start,o.fromAnchor,padding),entry=exitPoint(target,end,o.toAnchor,padding);
@@ -219,7 +223,7 @@ const MAX_ROUTES_PER_SCENE=512;
 function cachedConnectorRoute(o:SceneObject,all:SceneObject[]):CachedConnectorRoute {
  let scene=sceneRouteCaches.get(all);
  if(!scene){scene=new Map();sceneRouteCaches.set(all,scene);}
- const geometry=JSON.stringify([o.pageId,o.x,o.y,o.width,o.height,o.fromId,o.toId,o.fromX,o.fromY,o.toX,o.toY,o.fromAnchor,o.toAnchor,o.routing,o.strokeWidth]);
+ const geometry=JSON.stringify([o.pageId,o.x,o.y,o.width,o.height,o.fromId,o.toId,o.fromX,o.fromY,o.toX,o.toY,o.fromAnchor,o.toAnchor,o.routing,o.strokeWidth,o.bends]);
  const previous=scene.get(o.id);
  if(previous?.geometry===geometry){scene.delete(o.id);scene.set(o.id,previous);return previous;}
  const cached:CachedConnectorRoute={geometry,points:calculateConnectorRoute(o,all)};
