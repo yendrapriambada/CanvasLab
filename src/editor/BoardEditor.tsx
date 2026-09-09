@@ -3909,13 +3909,36 @@ export default function BoardEditor({
               </IconButton>
               <IconButton
                 label={
-                  (one as any).arrow === false
-                    ? "No arrowhead (click to add)"
-                    : "Arrowhead (click to remove)"
+                  one.arrowStart
+                    ? "Start arrowhead (click to remove)"
+                    : "No start arrowhead (click to add)"
                 }
-                active={(one as any).arrow !== false}
+                active={!!one.arrowStart}
                 onClick={() =>
-                  patchSelected({ arrow: (one as any).arrow === false } as any)
+                  patchSelected({ arrowStart: !one.arrowStart } as any)
+                }
+              >
+                <ArrowLeft size={16} />
+              </IconButton>
+              <IconButton
+                label={
+                  (one.arrowEnd !== undefined
+                    ? one.arrowEnd
+                    : (one as any).arrow !== false)
+                    ? "End arrowhead (click to remove)"
+                    : "No end arrowhead (click to add)"
+                }
+                active={
+                  one.arrowEnd !== undefined
+                    ? !!one.arrowEnd
+                    : (one as any).arrow !== false
+                }
+                onClick={() =>
+                  patchSelected({
+                    arrowEnd: !(one.arrowEnd !== undefined
+                      ? one.arrowEnd
+                      : (one as any).arrow !== false),
+                  } as any)
                 }
               >
                 <ArrowRight size={16} />
@@ -4130,13 +4153,25 @@ export default function BoardEditor({
                 <Type size={16} />
                 Edit connector label
               </button>
+              <button onClick={() => patchSelected({ arrowStart: !one.arrowStart } as any)}>
+                <ArrowLeft size={16} />
+                {one.arrowStart ? "Remove start arrowhead" : "Add start arrowhead"}
+              </button>
               <button
-                onClick={() =>
-                  patchSelected({ arrow: (one as any).arrow === false } as any)
-                }
+                onClick={() => {
+                  const shown =
+                    one.arrowEnd !== undefined
+                      ? one.arrowEnd
+                      : (one as any).arrow !== false;
+                  patchSelected({ arrowEnd: !shown } as any);
+                }}
               >
                 <ArrowUpRight size={16} />
-                Toggle arrowhead
+                {(one.arrowEnd !== undefined
+                  ? one.arrowEnd
+                  : (one as any).arrow !== false)
+                  ? "Remove end arrowhead"
+                  : "Add end arrowhead"}
               </button>
             </>
           )}

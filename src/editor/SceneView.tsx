@@ -68,7 +68,12 @@ export const SceneView = memo(function SceneView({
           stroke={stroke}
           strokeWidth={o.strokeWidth || 2}
           strokeDasharray={extra.dashed ? "7 5" : undefined}
-          markerEnd={extra.arrow === false ? undefined : `url(#arrow-${o.id})`}
+          markerStart={o.arrowStart ? `url(#arrow-${o.id})` : undefined}
+          markerEnd={
+            (o.arrowEnd !== undefined ? o.arrowEnd : extra.arrow !== false)
+              ? `url(#arrow-${o.id})`
+              : undefined
+          }
         />
         <defs>
           <marker
