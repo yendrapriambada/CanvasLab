@@ -3103,20 +3103,39 @@ export default function BoardEditor({
                       mid = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 },
                       // A horizontal run only slides vertically, and vice
                       // versa - the resize-handle cursor convention.
-                      horizontal = Math.abs(p.y - q.y) < 0.5;
+                      horizontal = Math.abs(p.y - q.y) < 0.5,
+                      long = 18 / camera.zoom,
+                      short = 6 / camera.zoom,
+                      w = horizontal ? long : short,
+                      h = horizontal ? short : long,
+                      hitW = Math.max(w, 16 / camera.zoom),
+                      hitH = Math.max(h, 16 / camera.zoom);
                     return (
-                      <circle
+                      <g
                         key={`mid-${i}`}
                         data-handle={`bend-mid-${i}`}
-                        cx={mid.x}
-                        cy={mid.y}
-                        r={4 / camera.zoom}
-                        fill="#0d99ff"
-                        stroke="white"
-                        strokeWidth={1.5 / camera.zoom}
-                        opacity={0.85}
                         style={{ cursor: horizontal ? "ns-resize" : "ew-resize" }}
-                      />
+                      >
+                        <rect
+                          x={mid.x - hitW / 2}
+                          y={mid.y - hitH / 2}
+                          width={hitW}
+                          height={hitH}
+                          fill="transparent"
+                        />
+                        <rect
+                          x={mid.x - w / 2}
+                          y={mid.y - h / 2}
+                          width={w}
+                          height={h}
+                          rx={short / 2}
+                          fill="#0d99ff"
+                          stroke="white"
+                          strokeWidth={1.5 / camera.zoom}
+                          opacity={0.9}
+                          pointerEvents="none"
+                        />
+                      </g>
                     );
                   })}
                   {route.slice(1, -1).map((p, i) => (
