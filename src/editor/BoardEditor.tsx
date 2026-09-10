@@ -382,6 +382,9 @@ export default function BoardEditor({
     point: Point;
   } | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
+  // Only tracked while the connector tool is aiming, so ordinary pointer moves
+  // keep costing nothing.
+  const [cursor, setCursor] = useState<Point | null>(null);
   const [hoverAnchor, setHoverAnchor] = useState<{
     id: string;
     side: ConnectorAnchor;
@@ -1556,14 +1559,21 @@ export default function BoardEditor({
   /** Every side a connector being dragged could snap onto right now, so the
    * magnet is something you aim at rather than something you discover. */
   const magnetTargets = () => {
-    if (
-      !canEdit ||
-      (interaction.kind !== "connect" && interaction.kind !== "endpoint")
-    )
-      return [];
-    const point = interaction.current;
-    const exclude =
-      interaction.kind === "connect" ? interaction.fromId : interaction.id;
+    const aiming =
+      interaction.kind === "connect" || interaction.kind === "endpoint";
+    // Aiming with the connector tool counts too: the sides have to be visible
+    // before the press, not only once a line is already being dragged.
+    const point = aiming
+      ? interaction.current
+      : tool === "connector" && interaction.kind === "idle"
+        ? cursor
+        : null;
+    if (!canEdit || !point) return [];
+    const exclude = !aiming
+      ? pendingConnector?.id
+      : interaction.kind === "connect"
+        ? interaction.fromId
+        : interaction.id;
     return pageObjects
       .filter(
         (o) =>
@@ -1949,6 +1959,8 @@ export default function BoardEditor({
       return;
     }
     sendPresence({ x: p.x, y: p.y, pageId, selected, spotlight: spotlighting });
+    if (tool === "connector" && interaction.kind === "idle") setCursor(p);
+    else if (cursor) setCursor(null);
     // Anchors can vanish under the pointer (their shape stops being hovered),
     // so pointerleave alone cannot be trusted to end a "+" hover.
     if (hoverAnchor && !(e.target as Element).closest?.("[data-connector-anchor]"))
@@ -2176,7 +2188,17 @@ export default function BoardEditor({
         interaction.axis,
         interaction.axis === "y" ? p.y : p.x,
       );
-      setPreview({ [interaction.id]: { bends } });
+      // Remember which attachments the bends were placed against, so they can
+      // ride along when those shapes move later instead of freezing in place.
+      setPreview({
+        [interaction.id]: {
+          bends,
+          bendBase: {
+            from: interaction.baseRoute[0],
+            to: interaction.baseRoute[interaction.baseRoute.length - 1],
+          },
+        },
+      });
       return;
     }
     if (tool === "eraser" && e.buttons === 1 && canEdit) {
@@ -2597,24 +2619,34 @@ export default function BoardEditor({
   );
   const displayObjects =
     interaction.kind === "endpoint"
-      ? visibleObjects.map((o) =>
-          o.id === interaction.id
+      ? visibleObjects.map((o) => {
+          if (o.id !== interaction.id) return o;
+          // Show the end already sitting on the side it will land on, so the
+          // magnet is felt while the button is still down.
+          const held = connectorTarget
             ? {
-                ...o,
-                ...(interaction.end === "from"
-                  ? {
-                      fromId: undefined,
-                      fromX: interaction.current.x,
-                      fromY: interaction.current.y,
-                    }
-                  : {
-                      toId: undefined,
-                      toX: interaction.current.x,
-                      toY: interaction.current.y,
-                    }),
+                id: connectorTarget.object.id,
+                anchor: connectorTarget.anchor,
+                point: connectorTarget.point,
               }
-            : o,
-        )
+            : { id: undefined, anchor: undefined, point: interaction.current };
+          return {
+            ...o,
+            ...(interaction.end === "from"
+              ? {
+                  fromId: held.id,
+                  fromAnchor: held.anchor,
+                  fromX: held.point.x,
+                  fromY: held.point.y,
+                }
+              : {
+                  toId: held.id,
+                  toAnchor: held.anchor,
+                  toX: held.point.x,
+                  toY: held.point.y,
+                }),
+          };
+        })
       : visibleObjects;
   const searchResults = search
     ? objects.filter(
@@ -2823,6 +2855,36 @@ export default function BoardEditor({
               />
             </g>
           )}
+          {!quickConnectGhost &&
+            quickConnectHoverTarget &&
+            quickConnectPreview &&
+            (() => {
+              // The line it would draw, shown the same way the ghost's is:
+              // the highlight alone never said what was about to connect.
+              const side =
+                interaction.kind === "connect"
+                  ? interaction.fromAnchor
+                  : hoverAnchor?.side;
+              const sourceId =
+                interaction.kind === "connect"
+                  ? interaction.fromId
+                  : hoverAnchor?.id;
+              const source = pageObjects.find((o) => o.id === sourceId);
+              if (!source || !side) return null;
+              const from = shapeAnchorPoint(source, side);
+              return (
+                <line
+                  pointerEvents="none"
+                  x1={from.x}
+                  y1={from.y}
+                  x2={quickConnectPreview.point.x}
+                  y2={quickConnectPreview.point.y}
+                  stroke="#0d99ff"
+                  strokeDasharray={`${5 / camera.zoom} ${4 / camera.zoom}`}
+                  strokeWidth={1.5 / camera.zoom}
+                />
+              );
+            })()}
           {!quickConnectGhost && quickConnectHoverTarget && (
             // Hovering toward a shape that's already there: highlight it
             // instead of drawing a ghost that would just sit on top of it.

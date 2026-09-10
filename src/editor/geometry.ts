@@ -131,10 +131,97 @@ function orthogonalize(points:Point[]):Point[] {
  }
  return out;
 }
+/** Collapse a run that doubles back along itself. The survivor stays inside
+ * the footprint of the two segments it replaces, so it cannot cross anything
+ * the original route already cleared - it only removes the fishhook. */
+function mergeReversals(points:Point[]):Point[] {
+ const out=[...points];
+ for(let i=1;i<out.length-1;){
+  const a=out[i-1],b=out[i],c=out[i+1];
+  const vertical=Math.abs(a.x-b.x)<EPSILON&&Math.abs(b.x-c.x)<EPSILON;
+  const horizontal=Math.abs(a.y-b.y)<EPSILON&&Math.abs(b.y-c.y)<EPSILON;
+  const doublesBack=vertical?(b.y-a.y)*(c.y-b.y)<-EPSILON
+   :horizontal?(b.x-a.x)*(c.x-b.x)<-EPSILON:false;
+  if(doublesBack){out.splice(i,1);i=Math.max(1,i-1);}else i++;
+ }
+ return out;
+}
 /** The straight run a connector keeps against the shape it is attached to.
  * It has to outlast the arrowhead - about nine stroke widths of marker - or
  * the head lands on top of the rounded corner and reads as a sharp kink. */
 const leadLength=(o:SceneObject)=>Math.max(32,(o.strokeWidth||2)*10+12);
+/**
+ * The arm from an attachment out to the first hand-placed bend. It leaves the
+ * shape square-on, then takes whichever elbow reaches the bend without
+ * re-entering it. A bend sitting behind the attachment has no such elbow, so
+ * the arm steps out past the shape's side and comes back along it - never
+ * doubling back over its own line, and never cutting through the shape.
+ */
+function armWaypoints(o:SceneObject,p:Point,anchor:unknown,lead:number,toward:Point,blocker:Obstacle):Point[] {
+ const exit=exitPoint(o,p,anchor,lead);
+ for(const elbow of [{x:toward.x,y:exit.y},{x:exit.x,y:toward.y}]){
+  const option=[exit,elbow,toward];
+  if(option.every((q,i)=>!i||clearSegment(option[i-1],q,[blocker])))return [exit,elbow];
+ }
+ const d=axisDirection(o,p,anchor);
+ if(Math.abs(d.x)>Math.abs(d.y)){
+  const lateral=toward.y>=blocker.y+blocker.height/2?blocker.y+blocker.height:blocker.y;
+  return [exit,{x:exit.x,y:lateral},{x:toward.x,y:lateral}];
+ }
+ const lateral=toward.x>=blocker.x+blocker.width/2?blocker.x+blocker.width:blocker.x;
+ return [exit,{x:lateral,y:exit.y},{x:lateral,y:toward.y}];
+}
+/** A bend dropped on top of a shape is moved to the nearest point just off it,
+ * so the run through it has somewhere clear to aim for. */
+function pushOutside(p:Point,obstacles:Obstacle[]):Point {
+ let q=p;
+ for(const o of obstacles){
+  if(!inside(q,o))continue;
+  const left=q.x-o.x,right=o.x+o.width-q.x,top=q.y-o.y,bottom=o.y+o.height-q.y;
+  const nearest=Math.min(left,right,top,bottom);
+  q=nearest===left?{x:o.x,y:q.y}
+   :nearest===right?{x:o.x+o.width,y:q.y}
+   :nearest===top?{x:q.x,y:o.y}
+   :{x:q.x,y:o.y+o.height};
+ }
+ return q;
+}
+/**
+ * Push a hand-bent route out of any shape it would otherwise run through.
+ * Only the runs between bends are re-routed - the arms already leave their own
+ * shape cleanly - and each detour is solved on the same visibility grid the
+ * automatic router uses, so it goes around the way the rest of the app does.
+ */
+function avoidObstacles(points:Point[],obstacles:Obstacle[]):Point[] {
+ if(obstacles.length<1||points.length<3)return points;
+ const out=[points[0]];
+ for(let i=1;i<points.length;i++){
+  const a=out[out.length-1],b=points[i];
+  const holdsAnAttachment=i===1||i===points.length-1;
+  if(!holdsAnAttachment&&!clearSegment(a,b,obstacles)){
+   const span={x:Math.min(a.x,b.x)-160,y:Math.min(a.y,b.y)-160,width:Math.abs(a.x-b.x)+320,height:Math.abs(a.y-b.y)+320};
+   const near=obstacles.filter(o=>intersects(o,span)).slice(0,24);
+   const detour=gridRoute(a,b,obstacles,near.length?near:obstacles.slice(0,24));
+   if(detour){out.push(...detour.slice(1));continue;}
+  }
+  out.push(b);
+ }
+ return out;
+}
+/** Hand-placed bends are stored in the frame their shapes were in when they
+ * were dragged. Each rides the end it belongs to, so moving a shape carries
+ * its own arm along and only the run between the two arms stretches. */
+function adaptedBends(o:SceneObject,start:Point,end:Point):Point[] {
+ const bends=o.bends||[];
+ const base=o.bendBase as {from?:Point;to?:Point}|undefined;
+ if(!bends.length||!base?.from||!base?.to)return bends;
+ const from={x:start.x-base.from.x,y:start.y-base.from.y};
+ const to={x:end.x-base.to.x,y:end.y-base.to.y};
+ return bends.map((b,i)=>{
+  const shift=i<bends.length/2?from:to;
+  return {x:b.x+shift.x,y:b.y+shift.y};
+ });
+}
 function axisDirection(o:SceneObject,p:Point,anchor:unknown):Point {
  let d:Point;
  if(isAnchor(anchor)){
@@ -208,6 +295,9 @@ function gridRoute(start:Point,end:Point,obstacles:Obstacle[],relevant:Obstacle[
  * segments are still checked against every page obstacle, including distant ones.
  */
 function calculateConnectorRoute(o:SceneObject,all:SceneObject[]):Point[]{
+ return cleanRoute(mergeReversals(routeConnector(o,all)));
+}
+function routeConnector(o:SceneObject,all:SceneObject[]):Point[]{
  const [start,end]=connectorPoints(o,all);
  if(o.routing!=='elbow')return [start,end];
  const padding=Math.max(16,(o.strokeWidth||2)*2+8),lead=leadLength(o);
@@ -218,17 +308,18 @@ function calculateConnectorRoute(o:SceneObject,all:SceneObject[]):Point[]{
  // leaves the shapes on are still regrown here: they stay perpendicular to
  // the side they attach to, and orthogonalize() re-joins them to the bends,
  // so a bend dragged off-axis bends the arms instead of slanting them.
- if(o.bends&&o.bends.length){
-  const guided=[start];
-  if(source)guided.push(exitPoint(source,start,o.fromAnchor,lead));
-  guided.push(...o.bends);
-  if(target)guided.push(exitPoint(target,end,o.toAnchor,lead));
-  guided.push(end);
-  return cleanRoute(orthogonalize(guided));
- }
- const exit=exitPoint(source,start,o.fromAnchor,lead),entry=exitPoint(target,end,o.toAnchor,lead);
  const obstacles=all.filter(v=>v.pageId===o.pageId&&!['connector','section','pen','text','stamp'].includes(v.type))
   .map(v=>inflated(v,padding)).sort((a,b)=>a.x-b.x||a.y-b.y||a.id.localeCompare(b.id));
+ const bends=adaptedBends(o,start,end).map(b=>pushOutside(b,obstacles));
+ if(bends.length){
+  const guided=[start];
+  if(source)guided.push(...armWaypoints(source,start,o.fromAnchor,lead,bends[0],inflated(source,padding)));
+  guided.push(...bends);
+  if(target)guided.push(...armWaypoints(target,end,o.toAnchor,lead,bends[bends.length-1],inflated(target,padding)).reverse());
+  guided.push(end);
+  return cleanRoute(avoidObstacles(orthogonalize(guided),obstacles));
+ }
+ const exit=exitPoint(source,start,o.fromAnchor,lead),entry=exitPoint(target,end,o.toAnchor,lead);
  // Overlapping objects can put a free endpoint/lead inside another object. Such
  // an obstacle cannot be avoided on exit; route around the remaining shapes.
  const blockers=obstacles.filter(b=>!inside(exit,b)&&!inside(entry,b));
@@ -268,7 +359,7 @@ const MAX_ROUTES_PER_SCENE=512;
 function cachedConnectorRoute(o:SceneObject,all:SceneObject[]):CachedConnectorRoute {
  let scene=sceneRouteCaches.get(all);
  if(!scene){scene=new Map();sceneRouteCaches.set(all,scene);}
- const geometry=JSON.stringify([o.pageId,o.x,o.y,o.width,o.height,o.fromId,o.toId,o.fromX,o.fromY,o.toX,o.toY,o.fromAnchor,o.toAnchor,o.routing,o.strokeWidth,o.bends]);
+ const geometry=JSON.stringify([o.pageId,o.x,o.y,o.width,o.height,o.fromId,o.toId,o.fromX,o.fromY,o.toX,o.toY,o.fromAnchor,o.toAnchor,o.routing,o.strokeWidth,o.bends,o.bendBase]);
  const previous=scene.get(o.id);
  if(previous?.geometry===geometry){scene.delete(o.id);scene.set(o.id,previous);return previous;}
  const cached:CachedConnectorRoute={geometry,points:calculateConnectorRoute(o,all)};
