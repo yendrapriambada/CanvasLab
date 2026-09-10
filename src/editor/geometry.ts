@@ -328,6 +328,10 @@ function routeConnector(o:SceneObject,all:SceneObject[]):Point[]{
  // the plain route - a straight line when they face each other - wins.
  const span=Math.abs(end.x-start.x)+Math.abs(end.y-start.y);
  const bends=span<lead*2?[]:adaptedBends(o,start,end).map(b=>pushOutside(b,obstacles));
+ // The same closeness shrinks the arm itself: a lead longer than the gap
+ // between the shapes pushes exit past entry (or the reverse), so the two
+ // ends swap sides of one another and the router has to loop to recover.
+ const shortLead=Math.min(lead,Math.max(8,span/2));
  if(bends.length){
   const guided=[start];
   if(source)guided.push(...armWaypoints(source,start,o.fromAnchor,lead,bends[0],inflated(source,padding)));
@@ -336,7 +340,7 @@ function routeConnector(o:SceneObject,all:SceneObject[]):Point[]{
   guided.push(end);
   return cleanRoute(avoidObstacles(orthogonalize(guided),obstacles));
  }
- const exit=exitPoint(source,start,o.fromAnchor,lead),entry=exitPoint(target,end,o.toAnchor,lead);
+ const exit=exitPoint(source,start,o.fromAnchor,shortLead),entry=exitPoint(target,end,o.toAnchor,shortLead);
  // Overlapping objects can put a free endpoint/lead inside another object. Such
  // an obstacle cannot be avoided on exit; route around the remaining shapes.
  const blockers=obstacles.filter(b=>!inside(exit,b)&&!inside(entry,b));

@@ -144,6 +144,14 @@ describe('bound connector routing',()=>{
   const b=object('b',{x:500,width:100,height:200});
   expect(connectorPoints(connector,[a,b])[1]).toEqual({x:500,y:50});
  });
+ it('stays a plain straight line between close facing shapes, arm or not',()=>{
+  const a=object('a'),b=object('b',{y:110});
+  // Facing sides only 10px apart - well under the 32px lead each end wants,
+  // so the exit and entry used to land on the wrong sides of one another.
+  const connector=edge({fromAnchor:'bottom',toAnchor:'top'});
+  expect(connectorRoutePoints(connector,[a,b])).toEqual([{x:50,y:100},{x:50,y:110}]);
+  expect(routedConnectorPath(connector,[a,b])).toBe('M 50 100 L 50 110');
+ });
  it('returns finite points for coincident centers and zero-sized shapes',()=>{
   const a=object('a',{width:0,height:0}),b=object('b',{width:0,height:0});
   const points=connectorRoutePoints(edge(),[a,b]);
