@@ -109,6 +109,32 @@ function cleanRoute(points:Point[]):Point[]{
 function routeLength(points:Point[]):number {
  return points.reduce((sum,p,i)=>i?sum+Math.abs(p.x-points[i-1].x)+Math.abs(p.y-points[i-1].y):sum,0);
 }
+/** Insert the missing elbow wherever two points are not axis-aligned, so a
+ * route can never render a diagonal - and therefore never an acute corner.
+ * The inserted leg continues the run's alternation, which is what makes a
+ * dragged bend pull its neighbouring arms along instead of leaving them
+ * behind at a slant. */
+function orthogonalize(points:Point[]):Point[] {
+ const out:Point[]=[];
+ for(const p of points){
+  const last=out[out.length-1];
+  if(!last){out.push(p);continue;}
+  if(samePoint(last,p))continue;
+  if(Math.abs(p.x-last.x)>EPSILON&&Math.abs(p.y-last.y)>EPSILON){
+   const previous=out[out.length-2];
+   // Follow a horizontal run with a vertical leg and vice versa; with no run
+   // to follow yet, lead with the longer axis.
+   const cameInHorizontal=previous?Math.abs(previous.y-last.y)<EPSILON:Math.abs(p.x-last.x)<Math.abs(p.y-last.y);
+   out.push(cameInHorizontal?{x:last.x,y:p.y}:{x:p.x,y:last.y});
+  }
+  out.push(p);
+ }
+ return out;
+}
+/** The straight run a connector keeps against the shape it is attached to.
+ * It has to outlast the arrowhead - about nine stroke widths of marker - or
+ * the head lands on top of the rounded corner and reads as a sharp kink. */
+const leadLength=(o:SceneObject)=>Math.max(32,(o.strokeWidth||2)*10+12);
 function axisDirection(o:SceneObject,p:Point,anchor:unknown):Point {
  let d:Point;
  if(isAnchor(anchor)){
@@ -184,13 +210,23 @@ function gridRoute(start:Point,end:Point,obstacles:Obstacle[],relevant:Obstacle[
 function calculateConnectorRoute(o:SceneObject,all:SceneObject[]):Point[]{
  const [start,end]=connectorPoints(o,all);
  if(o.routing!=='elbow')return [start,end];
- // A manually-bent connector (dragged like FigJam's editable elbow line)
- // keeps exactly the points the user placed - skip the auto-router/obstacle
- // avoidance entirely so their routing is never second-guessed.
- if(o.bends&&o.bends.length)return cleanRoute([start,...o.bends,end]);
- const padding=Math.max(16,(o.strokeWidth||2)*2+8);
+ const padding=Math.max(16,(o.strokeWidth||2)*2+8),lead=leadLength(o);
  const source=all.find(v=>v.id===o.fromId),target=all.find(v=>v.id===o.toId);
- const exit=exitPoint(source,start,o.fromAnchor,padding),entry=exitPoint(target,end,o.toAnchor,padding);
+ // A manually-bent connector (dragged like FigJam's editable elbow line)
+ // keeps the points the user placed - the auto-router/obstacle avoidance is
+ // skipped entirely so their routing is never second-guessed. The arms it
+ // leaves the shapes on are still regrown here: they stay perpendicular to
+ // the side they attach to, and orthogonalize() re-joins them to the bends,
+ // so a bend dragged off-axis bends the arms instead of slanting them.
+ if(o.bends&&o.bends.length){
+  const guided=[start];
+  if(source)guided.push(exitPoint(source,start,o.fromAnchor,lead));
+  guided.push(...o.bends);
+  if(target)guided.push(exitPoint(target,end,o.toAnchor,lead));
+  guided.push(end);
+  return cleanRoute(orthogonalize(guided));
+ }
+ const exit=exitPoint(source,start,o.fromAnchor,lead),entry=exitPoint(target,end,o.toAnchor,lead);
  const obstacles=all.filter(v=>v.pageId===o.pageId&&!['connector','section','pen','text','stamp'].includes(v.type))
   .map(v=>inflated(v,padding)).sort((a,b)=>a.x-b.x||a.y-b.y||a.id.localeCompare(b.id));
  // Overlapping objects can put a free endpoint/lead inside another object. Such
@@ -252,7 +288,7 @@ function roundedRoutePath(points:Point[]):string {
   const before=Math.hypot(corner.x-a.x,corner.y-a.y),after=Math.hypot(b.x-corner.x,b.y-corner.y);
   const cross=(corner.x-a.x)*(b.y-corner.y)-(corner.y-a.y)*(b.x-corner.x);
   if(before<EPSILON||after<EPSILON||Math.abs(cross)<EPSILON){commands.push(`L ${corner.x} ${corner.y}`);continue;}
-  const radius=Math.min(12,before/2,after/2);
+  const radius=Math.min(16,before/2,after/2);
   const enter={x:corner.x-(corner.x-a.x)/before*radius,y:corner.y-(corner.y-a.y)/before*radius};
   const leave={x:corner.x+(b.x-corner.x)/after*radius,y:corner.y+(b.y-corner.y)/after*radius};
   commands.push(`L ${enter.x} ${enter.y}`,`Q ${corner.x} ${corner.y} ${leave.x} ${leave.y}`);
@@ -287,27 +323,19 @@ export function curveOffsetFromPoint(a:Point,b:Point,p:Point):number {
  * perpendicular lead inserted first, since that endpoint is anchored to a
  * shape and can never move itself.
  */
-export function dragConnectorSegment(route:Point[],bends:Point[],segmentIndex:number,axis:'x'|'y',value:number):Point[] {
- const n=route.length;
- const touchesStart=segmentIndex===0,touchesEnd=segmentIndex===n-2;
- const make=(primary:number,secondary:number):Point=>axis==='x'?{x:primary,y:secondary}:{x:secondary,y:primary};
- const secondaryOf=(p:Point)=>axis==='x'?p.y:p.x;
- if(touchesStart&&touchesEnd){
-  const a=route[0],b=route[1];
-  return [make(value,secondaryOf(a)),make(value,secondaryOf(b))];
+export function dragConnectorSegment(route:Point[],segmentIndex:number,axis:'x'|'y',value:number):Point[] {
+ const interior=route.slice(1,-1).map(p=>({...p}));
+ if(!interior.length){
+  // A single straight run: bending it opens a Z between the two attachments.
+  const start=route[0],end=route[route.length-1];
+  return axis==='y'?[{x:start.x,y:value},{x:end.x,y:value}]:[{x:value,y:start.y},{x:value,y:end.y}];
  }
- if(touchesStart){
-  const a=route[0],target=route[1];
-  return [make(value,secondaryOf(a)),make(value,secondaryOf(target)),...bends];
- }
- if(touchesEnd){
-  const a=route[n-1],target=route[n-2];
-  return [...bends,make(value,secondaryOf(target)),make(value,secondaryOf(a))];
- }
- const out=[...bends];
- out[segmentIndex-1]={...out[segmentIndex-1],[axis]:value};
- out[segmentIndex]={...out[segmentIndex],[axis]:value};
- return out;
+ // Route point i is interior point i-1; both ends of the dragged segment move
+ // together, and an attachment among them simply stays where the shape holds
+ // it - its arm is regrown when the route is rebuilt.
+ for(const index of [segmentIndex-1,segmentIndex])
+  if(index>=0&&index<interior.length)interior[index]={...interior[index],[axis]:value};
+ return interior;
 }
 export function routedConnectorPath(o:SceneObject,all:SceneObject[]):string {
  if(o.routing==='curve'){

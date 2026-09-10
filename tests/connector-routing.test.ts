@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { SceneObject } from '../src/lib/model';
-import { boundary, connectorPoints, connectorRoutePoints, rotate, routedConnectorPath, shapeAnchorPoint } from '../src/editor/geometry';
+import { boundary, connectorPoints, connectorRoutePoints, dragConnectorSegment, rotate, routedConnectorPath, shapeAnchorPoint } from '../src/editor/geometry';
 import type { Bounds, Point } from '../src/editor/geometry';
 const object=(id:string,values:Partial<SceneObject>={}):SceneObject=>({id,pageId:'page',type:'rectangle',x:0,y:0,width:100,height:100,rotation:0,fill:'#eee',stroke:'#555',strokeWidth:2,text:'',fontSize:20,bold:false,italic:false,align:'center',locked:false,opacity:1,order:0,...values});
 const edge=(values:Partial<SceneObject>={})=>object('edge',{type:'connector',fromId:'a',toId:'b',routing:'elbow',...values});
@@ -66,6 +66,27 @@ describe('bound connector routing',()=>{
   expect(connectorRoutePoints(connector,[])).toEqual([{x:-50,y:30},{x:360,y:190}]);
   expect(routedConnectorPath(connector,[])).toBe('M -50 30 L 360 190');
  });
+ it('keeps a hand-bent route orthogonal and regrows the arms it leaves on',()=>{
+  const a=object('a'),b=object('b',{x:600,y:400});
+  const connector=edge({fromAnchor:'right',toAnchor:'left',bends:[{x:330,y:220}]});
+  const points=connectorRoutePoints(connector,[a,b]);
+  expectOrthogonal(points);
+  expect(points[0]).toEqual({x:100,y:50});
+  expect(points.at(-1)).toEqual({x:600,y:450});
+  expect(points).toContainEqual({x:330,y:220});
+  // The arm leaves the shape along its own side before turning off toward the bend.
+  expect(points[1]).toEqual({x:132,y:50});
+ });
+ it('slides a dragged run without leaving a diagonal behind',()=>{
+  const a=object('a'),b=object('b',{x:600});
+  const connector=edge({fromAnchor:'right',toAnchor:'left'});
+  const route=connectorRoutePoints(connector,[a,b]);
+  const bends=dragConnectorSegment(route,0,'y',260);
+  const bent=connectorRoutePoints({...connector,id:'bent',bends},[a,b]);
+  expectOrthogonal(bent);
+  expect(bent.some(p=>Math.abs(p.y-260)<1e-6)).toBe(true);
+  expect(bent[0]).toEqual({x:100,y:50});expect(bent.at(-1)).toEqual({x:600,y:50});
+ });
  it('returns finite points for coincident centers and zero-sized shapes',()=>{
   const a=object('a',{width:0,height:0}),b=object('b',{width:0,height:0});
   const points=connectorRoutePoints(edge(),[a,b]);
@@ -108,10 +129,10 @@ describe('connector routing cache and rounded corners',()=>{
   // An old entry gets evicted rather than retaining every preview indefinitely.
   expect(connectorRoutePoints(firstConnector,scene)).not.toBe(first);
  });
- it('rounds long turns with 12px quadratic bends and preserves attachments',()=>{
+ it('rounds long turns with 16px quadratic bends and preserves attachments',()=>{
   const connector=edge({fromId:undefined,toId:undefined,fromX:0,fromY:0,toX:200,toY:100}),scene:SceneObject[]=[];
   expect(connectorRoutePoints(connector,scene)).toEqual([{x:0,y:0},{x:200,y:0},{x:200,y:100}]);
-  expect(routedConnectorPath(connector,scene)).toBe('M 0 0 L 188 0 Q 200 0 200 12 L 200 100');
+  expect(routedConnectorPath(connector,scene)).toBe('M 0 0 L 184 0 Q 200 0 200 16 L 200 100');
  });
  it('limits rounded corners to half of very short segments',()=>{
   const connector=edge({fromId:undefined,toId:undefined,fromX:0,fromY:0,toX:8,toY:6});

@@ -68,7 +68,7 @@ export const SceneView = memo(function SceneView({
           stroke={stroke}
           strokeWidth={o.strokeWidth || 2}
           strokeDasharray={extra.dashed ? "7 5" : undefined}
-          markerStart={o.arrowStart ? `url(#arrow-${o.id})` : undefined}
+          markerStart={o.arrowStart ? `url(#arrow-start-${o.id})` : undefined}
           markerEnd={
             (o.arrowEnd !== undefined ? o.arrowEnd : extra.arrow !== false)
               ? `url(#arrow-${o.id})`
@@ -83,6 +83,20 @@ export const SceneView = memo(function SceneView({
             refX="8"
             refY="3"
             orient="auto"
+            markerUnits="strokeWidth"
+          >
+            <path d="M0,0 L0,6 L9,3 z" fill={stroke} />
+          </marker>
+          {/* The head on the first point has to face back down the line, into
+              the shape it starts at - "auto" alone would aim it along the
+              route and leave it pointing outwards. */}
+          <marker
+            id={`arrow-start-${o.id}`}
+            markerWidth="10"
+            markerHeight="10"
+            refX="8"
+            refY="3"
+            orient="auto-start-reverse"
             markerUnits="strokeWidth"
           >
             <path d="M0,0 L0,6 L9,3 z" fill={stroke} />
@@ -218,7 +232,7 @@ export const SceneView = memo(function SceneView({
         />
       )}
       {o.type === "section" && (
-        <>
+        <g data-section-label="" style={details ? { cursor: "text" } : undefined}>
           <rect
             y="-35"
             width={Math.max(100, (o.text?.length || 7) * 9 + 24)}
@@ -227,9 +241,9 @@ export const SceneView = memo(function SceneView({
             fill="#dcd9e9"
           />
           <text x="12" y="-15" fill="#423955" fontSize="14" fontWeight="600">
-            {o.text || "Section"}
+            {editing ? "" : o.text || "Section"}
           </text>
-        </>
+        </g>
       )}
       {o.type === "table" && details ? (
         <foreignObject width={o.width} height={o.height}>

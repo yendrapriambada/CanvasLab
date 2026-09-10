@@ -154,9 +154,12 @@ type Interaction =
       segmentIndex: number;
       axis: "x" | "y";
       baseRoute: Point[];
-      baseBends: Point[];
     };
 const GRID_SIZE = 20;
+/** How close a dragged connector end has to get before a side grabs it, and
+ * how far out the sides of nearby shapes light up as targets. */
+const MAGNET_RANGE = 58;
+const MAGNET_REVEAL = 150;
 const COLORS = [
   "#ffe48b",
   "#ffc99e",
@@ -1546,9 +1549,46 @@ export default function BoardEditor({
           distance,
         };
       })
-      .filter((v) => v.distance <= 30 / camera.zoom)
+      .filter((v) => v.distance <= MAGNET_RANGE / camera.zoom)
       .sort((a, b) => a.distance - b.distance);
     return options[0];
+  };
+  /** Every side a connector being dragged could snap onto right now, so the
+   * magnet is something you aim at rather than something you discover. */
+  const magnetTargets = () => {
+    if (
+      !canEdit ||
+      (interaction.kind !== "connect" && interaction.kind !== "endpoint")
+    )
+      return [];
+    const point = interaction.current;
+    const exclude =
+      interaction.kind === "connect" ? interaction.fromId : interaction.id;
+    return pageObjects
+      .filter(
+        (o) =>
+          o.id !== exclude &&
+          !["connector", "pen", "section", "text", "stamp"].includes(o.type),
+      )
+      .map((o) => {
+        const b = box(o);
+        return {
+          o,
+          distance: contains(o, point)
+            ? 0
+            : Math.hypot(
+                Math.max(b.x - point.x, point.x - b.x - b.width, 0),
+                Math.max(b.y - point.y, point.y - b.y - b.height, 0),
+              ),
+        };
+      })
+      .filter((v) => v.distance <= MAGNET_REVEAL / camera.zoom)
+      .flatMap((v) =>
+        ANCHORS.map((side) => ({
+          id: `${v.o.id}-${side}`,
+          point: shapeAnchorPoint(v.o, side),
+        })),
+      );
   };
   const finishConnector = (
     from: Point,
@@ -1704,6 +1744,16 @@ export default function BoardEditor({
       });
       return;
     }
+    // A frame's title chip renames in place, the way its name reads.
+    const labelElement = (e.target as Element).closest?.("[data-section-label]");
+    if (labelElement && canEdit) {
+      const frame = hitObject(e.target, p);
+      if (frame?.type === "section" && !frame.locked) {
+        setSelected([frame.id]);
+        setEditing(frame.id);
+        return;
+      }
+    }
     const anchorElement = (e.target as Element).closest(
       "[data-connector-anchor]",
     );
@@ -1752,10 +1802,6 @@ export default function BoardEditor({
         // stretch to match - never a free-floating diagonal kink.
         const segmentIndex = +handle.slice(9);
         const baseRoute = connectorRoutePoints(one, allObjects);
-        const baseBends =
-          one.bends && one.bends.length === baseRoute.length - 2
-            ? one.bends
-            : baseRoute.slice(1, -1);
         const a = baseRoute[segmentIndex],
           b = baseRoute[segmentIndex + 1];
         const axis: "x" | "y" = Math.abs(a.y - b.y) < 0.5 ? "y" : "x";
@@ -1765,7 +1811,6 @@ export default function BoardEditor({
           segmentIndex,
           axis,
           baseRoute,
-          baseBends,
         });
       }
       else if (handle === "rotate")
@@ -1829,22 +1874,15 @@ export default function BoardEditor({
     }
     const soleSelection =
       selected.length === 1 && !!hit && selected[0] === hit.id;
-    if (
-      hit?.type === "section" &&
-      !e.shiftKey &&
-      !soleSelection &&
-      !hit.locked &&
-      canEdit
-    ) {
-      // An unselected frame's empty background starts a marquee over its
-      // contents, not a move - select the frame outright by clicking it
-      // without dragging, or drag its already-selected self to move it.
+    if (hit?.type === "section" && (e.metaKey || e.ctrlKey) && canEdit) {
+      // Pressing a frame's background moves it right away (below), so the
+      // marquee over its contents moves to ⌘/Ctrl-drag.
       setInteraction({
         kind: "marquee",
         start: p,
         current: p,
-        additive: false,
-        base: [],
+        additive: e.shiftKey,
+        base: e.shiftKey ? selected : [],
       });
       return;
     }
@@ -1911,6 +1949,10 @@ export default function BoardEditor({
       return;
     }
     sendPresence({ x: p.x, y: p.y, pageId, selected, spotlight: spotlighting });
+    // Anchors can vanish under the pointer (their shape stops being hovered),
+    // so pointerleave alone cannot be trusted to end a "+" hover.
+    if (hoverAnchor && !(e.target as Element).closest?.("[data-connector-anchor]"))
+      setHoverAnchor(null);
     if (interaction.kind === "idle" && canEdit && tool === "select") {
       const hit = [...pageObjects].reverse().find(
         (o) =>
@@ -2130,7 +2172,6 @@ export default function BoardEditor({
     if (interaction.kind === "connector-segment") {
       const bends = dragConnectorSegment(
         interaction.baseRoute,
-        interaction.baseBends,
         interaction.segmentIndex,
         interaction.axis,
         interaction.axis === "y" ? p.y : p.x,
@@ -2316,11 +2357,8 @@ export default function BoardEditor({
     const o = objects.find((v) => v.id === id);
     if (canEdit && o && !o.locked && textTypes.includes(o.type)) {
       setSelected([id]);
-      if (o.type === "section" || o.type === "connector") {
-        const value = prompt(
-          o.type === "section" ? "Section title" : "Connector label",
-          o.text || "",
-        );
+      if (o.type === "connector") {
+        const value = prompt("Connector label", o.text || "");
         if (value !== null) setText(id, value);
       } else setEditing(id);
     }
@@ -2496,6 +2534,10 @@ export default function BoardEditor({
       point: from,
     };
   };
+  const handleObject =
+    !editing && tool === "select" && interaction.kind === "idle"
+      ? pageObjects.find((o) => o.id === hovered) || one
+      : null;
   const quickConnectPreview =
     interaction.kind === "connect" && interaction.fromAnchor && !connectorTarget
       ? (() => {
@@ -2504,7 +2546,13 @@ export default function BoardEditor({
             ? previewQuickConnect(source, interaction.fromAnchor)
             : null;
         })()
-      : interaction.kind === "idle" && hoverAnchor
+      : // Only while that exact "+" is on screen and under the pointer: the
+        // handles unmount without a pointerleave whenever the hovered or
+        // selected shape changes, which used to strand the preview on a shape
+        // nobody was pointing at.
+        interaction.kind === "idle" &&
+          hoverAnchor &&
+          hoverAnchor.id === handleObject?.id
         ? (() => {
             const source = pageObjects.find((o) => o.id === hoverAnchor.id);
             return source
@@ -2514,10 +2562,7 @@ export default function BoardEditor({
         : null;
   const quickConnectGhost = quickConnectPreview?.ghost ?? null;
   const quickConnectHoverTarget = quickConnectPreview?.target ?? null;
-  const handleObject =
-    !editing && tool === "select" && interaction.kind === "idle"
-      ? pageObjects.find((o) => o.id === hovered) || one
-      : null;
+  const magnetPoints = magnetTargets();
   // The dot pitch is the same world unit that object snapping uses, so
   // sizing and positioning always land exactly on a visible dot.
   const gridStep =
@@ -2818,6 +2863,19 @@ export default function BoardEditor({
               pointerEvents="none"
             />
           )}
+          {magnetPoints.map((m) => (
+            <circle
+              key={m.id}
+              cx={m.point.x}
+              cy={m.point.y}
+              r={4 / camera.zoom}
+              fill="white"
+              stroke="#7350e6"
+              strokeWidth={1.5 / camera.zoom}
+              opacity={0.85}
+              pointerEvents="none"
+            />
+          ))}
           {connectorTarget && (
             <g pointerEvents="none">
               <rect
@@ -3330,7 +3388,38 @@ export default function BoardEditor({
           }}
         />
       </div>
-      {editingObject && (
+      {editingObject?.type === "section" && (
+        <input
+          className="section-name-input"
+          aria-label="Frame name"
+          autoFocus
+          defaultValue={editingObject.text || ""}
+          style={{
+            left: camera.x + editingObject.x * camera.zoom,
+            top: camera.y + (editingObject.y - 35) * camera.zoom,
+            width: Math.max(
+              100,
+              (editingObject.text?.length || 7) * 9 + 24,
+            ) * camera.zoom,
+            height: 29 * camera.zoom,
+            fontSize: 14 * camera.zoom,
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === "Enter") {
+              setText(editingObject.id, e.currentTarget.value);
+              setEditing(null);
+            }
+            if (e.key === "Escape") setEditing(null);
+          }}
+          onBlur={(e) => {
+            setText(editingObject.id, e.currentTarget.value);
+            setEditing(null);
+          }}
+        />
+      )}
+      {editingObject && editingObject.type !== "section" && (
         <div className="text-edit-overlay" style={editPos as CSSProperties}>
           <EditableText
             o={editingObject}
