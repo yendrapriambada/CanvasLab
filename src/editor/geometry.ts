@@ -44,21 +44,34 @@ export function boundary(o:SceneObject,toward:Point):Point {
  return rotate({x:c.x+dx*scale,y:c.y+dy*scale},o.rotation||0,c);
 }
 
-/** A named side belongs to the object's local axes, and follows its rotation. */
-export function shapeAnchorPoint(o:SceneObject,anchor:ConnectorAnchor):Point {
+/**
+ * A named side belongs to the object's local axes, and follows its rotation.
+ * `at` slides the attachment along that side, 0 to 1, so a connector can land
+ * anywhere on an edge rather than only its middle.
+ */
+export function shapeAnchorPoint(o:SceneObject,anchor:ConnectorAnchor,at=0.5):Point {
  const c=centerOf(o);
+ if(Math.abs(at-0.5)>EPSILON){
+  const along:Point=anchor==='top'?{x:o.x+o.width*at,y:o.y}
+   :anchor==='bottom'?{x:o.x+o.width*at,y:o.y+o.height}
+   :anchor==='left'?{x:o.x,y:o.y+o.height*at}
+   :{x:o.x+o.width,y:o.y+o.height*at};
+  // Through boundary() so a non-rectangular silhouette still gets its own edge.
+  return boundary(o,rotate(along,o.rotation||0,c));
+ }
  const vector:Record<ConnectorAnchor,Point>={top:{x:0,y:-1},right:{x:1,y:0},bottom:{x:0,y:1},left:{x:-1,y:0}};
  const direction=vector[anchor];
  const toward=rotate({x:c.x+direction.x*Math.max(o.width,1),y:c.y+direction.y*Math.max(o.height,1)},o.rotation||0,c);
  return boundary(o,toward);
 }
+const anchorFraction=(value:unknown)=>typeof value==='number'&&Number.isFinite(value)?clamp(value,0,1):0.5;
 
 export function connectorPoints(o:SceneObject,all:SceneObject[]):[Point,Point]{
  const a=all.find(v=>v.id===o.fromId),b=all.find(v=>v.id===o.toId);
  const start=a?centerOf(a):{x:o.fromX??o.x,y:o.fromY??o.y};
  const end=b?centerOf(b):{x:o.toX??(o.x+o.width),y:o.toY??(o.y+o.height)};
- return [a?(isAnchor(o.fromAnchor)?shapeAnchorPoint(a,o.fromAnchor):boundary(a,end)):start,
-         b?(isAnchor(o.toAnchor)?shapeAnchorPoint(b,o.toAnchor):boundary(b,start)):end];
+ return [a?(isAnchor(o.fromAnchor)?shapeAnchorPoint(a,o.fromAnchor,anchorFraction(o.fromAt)):boundary(a,end)):start,
+         b?(isAnchor(o.toAnchor)?shapeAnchorPoint(b,o.toAnchor,anchorFraction(o.toAt)):boundary(b,start)):end];
 }
 
 /** Kept for callers that deliberately need a simple, obstacle-free connector. */
@@ -310,7 +323,11 @@ function routeConnector(o:SceneObject,all:SceneObject[]):Point[]{
  // so a bend dragged off-axis bends the arms instead of slanting them.
  const obstacles=all.filter(v=>v.pageId===o.pageId&&!['connector','section','pen','text','stamp'].includes(v.type))
   .map(v=>inflated(v,padding)).sort((a,b)=>a.x-b.x||a.y-b.y||a.id.localeCompare(b.id));
- const bends=adaptedBends(o,start,end).map(b=>pushOutside(b,obstacles));
+ // Two attachments this close have no room for an arm on each side, let alone
+ // a detour between them: a kept bend can only curl back on itself here, so
+ // the plain route - a straight line when they face each other - wins.
+ const span=Math.abs(end.x-start.x)+Math.abs(end.y-start.y);
+ const bends=span<lead*2?[]:adaptedBends(o,start,end).map(b=>pushOutside(b,obstacles));
  if(bends.length){
   const guided=[start];
   if(source)guided.push(...armWaypoints(source,start,o.fromAnchor,lead,bends[0],inflated(source,padding)));
@@ -359,7 +376,7 @@ const MAX_ROUTES_PER_SCENE=512;
 function cachedConnectorRoute(o:SceneObject,all:SceneObject[]):CachedConnectorRoute {
  let scene=sceneRouteCaches.get(all);
  if(!scene){scene=new Map();sceneRouteCaches.set(all,scene);}
- const geometry=JSON.stringify([o.pageId,o.x,o.y,o.width,o.height,o.fromId,o.toId,o.fromX,o.fromY,o.toX,o.toY,o.fromAnchor,o.toAnchor,o.routing,o.strokeWidth,o.bends,o.bendBase]);
+ const geometry=JSON.stringify([o.pageId,o.x,o.y,o.width,o.height,o.fromId,o.toId,o.fromX,o.fromY,o.toX,o.toY,o.fromAnchor,o.toAnchor,o.fromAt,o.toAt,o.routing,o.strokeWidth,o.bends,o.bendBase]);
  const previous=scene.get(o.id);
  if(previous?.geometry===geometry){scene.delete(o.id);scene.set(o.id,previous);return previous;}
  const cached:CachedConnectorRoute={geometry,points:calculateConnectorRoute(o,all)};

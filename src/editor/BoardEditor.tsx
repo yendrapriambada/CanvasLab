@@ -160,6 +160,8 @@ const GRID_SIZE = 20;
  * how far out the sides of nearby shapes light up as targets. */
 const MAGNET_RANGE = 58;
 const MAGNET_REVEAL = 150;
+/** How near a side's middle still counts as its middle. */
+const MAGNET_CENTRE = 22;
 const COLORS = [
   "#ffe48b",
   "#ffc99e",
@@ -1529,10 +1531,24 @@ export default function BoardEditor({
           !["connector", "pen", "section", "text", "stamp"].includes(o.type),
       )
       .map((o) => {
-        const anchors = ANCHORS.map((side) => ({
-          side,
-          point: shapeAnchorPoint(o, side),
-        }));
+        // Land anywhere along a side, not only on its middle - though the
+        // middle keeps a pull of its own, so the tidy answer stays the easy one.
+        const centre = { x: o.x + o.width / 2, y: o.y + o.height / 2 };
+        const local = rotate(point, -(o.rotation || 0), centre);
+        const anchors = ANCHORS.map((side) => {
+          const lengthwise = side === "top" || side === "bottom";
+          const extent = Math.max(lengthwise ? o.width : o.height, 1);
+          const raw = clamp(
+            ((lengthwise ? local.x - o.x : local.y - o.y) / extent),
+            0,
+            1,
+          );
+          const at =
+            Math.abs(raw - 0.5) * extent < MAGNET_CENTRE / camera.zoom
+              ? 0.5
+              : raw;
+          return { side, at, point: shapeAnchorPoint(o, side, at) };
+        });
         const closest = anchors.sort(
           (a, b) =>
             Math.hypot(a.point.x - point.x, a.point.y - point.y) -
@@ -1548,6 +1564,7 @@ export default function BoardEditor({
         return {
           object: o,
           anchor: closest.side,
+          at: closest.at,
           point: closest.point,
           distance,
         };
@@ -1597,6 +1614,9 @@ export default function BoardEditor({
         ANCHORS.map((side) => ({
           id: `${v.o.id}-${side}`,
           point: shapeAnchorPoint(v.o, side),
+          // The whole edge takes a connector; the dot is just where it prefers.
+          from: shapeAnchorPoint(v.o, side, 0),
+          to: shapeAnchorPoint(v.o, side, 1),
         })),
       );
   };
@@ -1607,6 +1627,8 @@ export default function BoardEditor({
     toId: string | undefined,
     fromAnchor?: ConnectorAnchor,
     toAnchor?: ConnectorAnchor,
+    fromAt?: number,
+    toAt?: number,
   ) => {
     if (!canEdit || (fromId && fromId === toId)) return;
     const id = addObject({
@@ -1624,6 +1646,8 @@ export default function BoardEditor({
       toId,
       fromAnchor,
       toAnchor,
+      fromAt,
+      toAt,
       routing: "elbow",
       stroke,
       strokeWidth: 2,
@@ -2345,6 +2369,8 @@ export default function BoardEditor({
           target?.object.id,
           interaction.fromAnchor,
           target?.anchor,
+          undefined,
+          target?.at,
         );
       }
     }
@@ -2358,12 +2384,14 @@ export default function BoardEditor({
               fromX: p.x,
               fromY: p.y,
               fromAnchor: target?.anchor,
+              fromAt: target?.at,
             }
           : {
               toId: target?.object.id,
               toX: p.x,
               toY: p.y,
               toAnchor: target?.anchor,
+              toAt: target?.at,
             },
       );
     }
@@ -2516,6 +2544,7 @@ export default function BoardEditor({
           fromAnchor: interaction.fromAnchor,
           toId: connectorTarget?.object.id,
           toAnchor: connectorTarget?.anchor,
+          toAt: connectorTarget?.at,
           toX: interaction.current.x,
           toY: interaction.current.y,
           routing: "elbow",
@@ -2627,21 +2656,29 @@ export default function BoardEditor({
             ? {
                 id: connectorTarget.object.id,
                 anchor: connectorTarget.anchor,
+                at: connectorTarget.at,
                 point: connectorTarget.point,
               }
-            : { id: undefined, anchor: undefined, point: interaction.current };
+            : {
+                id: undefined,
+                anchor: undefined,
+                at: undefined,
+                point: interaction.current,
+              };
           return {
             ...o,
             ...(interaction.end === "from"
               ? {
                   fromId: held.id,
                   fromAnchor: held.anchor,
+                  fromAt: held.at,
                   fromX: held.point.x,
                   fromY: held.point.y,
                 }
               : {
                   toId: held.id,
                   toAnchor: held.anchor,
+                  toAt: held.at,
                   toX: held.point.x,
                   toY: held.point.y,
                 }),
@@ -2926,17 +2963,27 @@ export default function BoardEditor({
             />
           )}
           {magnetPoints.map((m) => (
-            <circle
-              key={m.id}
-              cx={m.point.x}
-              cy={m.point.y}
-              r={4 / camera.zoom}
-              fill="white"
-              stroke="#7350e6"
-              strokeWidth={1.5 / camera.zoom}
-              opacity={0.85}
-              pointerEvents="none"
-            />
+            <g key={m.id} pointerEvents="none">
+              <line
+                x1={m.from.x}
+                y1={m.from.y}
+                x2={m.to.x}
+                y2={m.to.y}
+                stroke="#7350e6"
+                strokeWidth={3 / camera.zoom}
+                strokeLinecap="round"
+                opacity={0.35}
+              />
+              <circle
+                cx={m.point.x}
+                cy={m.point.y}
+                r={4 / camera.zoom}
+                fill="white"
+                stroke="#7350e6"
+                strokeWidth={1.5 / camera.zoom}
+                opacity={0.85}
+              />
+            </g>
           ))}
           {connectorTarget && (
             <g pointerEvents="none">

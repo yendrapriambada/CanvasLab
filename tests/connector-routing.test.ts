@@ -128,6 +128,22 @@ describe('bound connector routing',()=>{
   expect(points).toContainEqual({x:600,y:200});
   expect(points).toContainEqual({x:300,y:50});
  });
+ it('runs straight between close shapes, ignoring bends that cannot fit',()=>{
+  const a=object('a'),b=object('b',{y:150});
+  // Facing sides only 50px apart, with a bend left over from when they were far.
+  const connector=edge({fromAnchor:'bottom',toAnchor:'top',bends:[{x:260,y:120}]});
+  expect(connectorRoutePoints(connector,[a,b])).toEqual([{x:50,y:100},{x:50,y:150}]);
+  expect(routedConnectorPath(connector,[a,b])).toBe('M 50 100 L 50 150');
+ });
+ it('lands anywhere along a side, with its middle as the default',()=>{
+  const a=object('a',{x:20,y:30,width:200,height:100});
+  expect(shapeAnchorPoint(a,'top')).toEqual({x:120,y:30});
+  expect(shapeAnchorPoint(a,'top',0.25)).toEqual({x:70,y:30});
+  expect(shapeAnchorPoint(a,'left',0.8)).toEqual({x:20,y:110});
+  const connector=edge({fromAnchor:'right',toAnchor:'left',toAt:0.25});
+  const b=object('b',{x:500,width:100,height:200});
+  expect(connectorPoints(connector,[a,b])[1]).toEqual({x:500,y:50});
+ });
  it('returns finite points for coincident centers and zero-sized shapes',()=>{
   const a=object('a',{width:0,height:0}),b=object('b',{width:0,height:0});
   const points=connectorRoutePoints(edge(),[a,b]);
