@@ -26,7 +26,7 @@ app.post(['/api','/api/server'],async(req,res)=>{
  if(!validOrigin(req.headers.origin,req.headers.host))return res.status(403).json({error:'Origin is not allowed'});
  const {action,...data}=req.body||{};if(typeof action!=='string')return res.status(400).json({error:'Action is required'});
  const key=`${req.ip}:${action.startsWith('auth.')?'auth':'api'}`,now=Date.now();let rate=limits.get(key);if(!rate||now-rate.at>60000){rate={count:0,at:now};limits.set(key,rate)}if(++rate.count>(action.startsWith('auth.')?80:600))return res.status(429).json({error:'Too many requests. Please wait a minute.'});
- try{const body=await upstream(action,data,cookieToken(req.headers.cookie));if(body.token&&['auth.login','auth.register','auth.google'].includes(action)){res.cookie('canvaslab_session',body.token,{httpOnly:true,sameSite:'strict',secure:process.env.COOKIE_SECURE==='true'||process.env.VERCEL==='1',maxAge:30*86400000,path:'/'});delete body.token}if(action==='auth.logout')res.clearCookie('canvaslab_session',{path:'/'});if(action==='scene.push'&&body.update&&!rooms.has(String(data.board_id)))await invalidateRelay(String(data.board_id));if(action==='scene.push'&&body.update&&rooms.has(String(data.board_id))){const r=rooms.get(String(data.board_id))!;Y.applyUpdate(r.doc,Buffer.from(body.update,'base64'));await refreshRoomAccess(String(data.board_id));broadcast(r,{type:'update',update:body.update})}if(/^(board\.(trash|restore|update|share_set|link_revoke)|project\.(trash|restore|member_set|update)|workspace\.member_set|workshop\.)/.test(action))await refreshRoomAccess();res.json(body)}catch(error){const e=error as Error&{status?:number;code?:string};res.status(e.status||502).json({error:e.status?e.message:'The database service is temporarily unavailable. Please try again.',code:e.code})}
+ try{const body=await upstream(action,data,cookieToken(req.headers.cookie));if(body.token&&['auth.login','auth.register','auth.google'].includes(action)){res.cookie('canvaslab_session',body.token,{httpOnly:true,sameSite:'strict',secure:process.env.COOKIE_SECURE==='true'||process.env.VERCEL==='1',maxAge:30*86400000,path:'/'});delete body.token}if(action==='auth.logout')res.clearCookie('canvaslab_session',{path:'/'});if(action==='scene.push'&&body.update&&!rooms.has(String(data.board_id)))await invalidateRelay(String(data.board_id)).catch(()=>{/* The update is already durably saved above; a relay hiccup here only delays another instance's resync, it must never fail this response. */});if(action==='scene.push'&&body.update&&rooms.has(String(data.board_id))){const r=rooms.get(String(data.board_id))!;Y.applyUpdate(r.doc,Buffer.from(body.update,'base64'));await refreshRoomAccess(String(data.board_id));broadcast(r,{type:'update',update:body.update})}if(/^(board\.(trash|restore|update|share_set|link_revoke)|project\.(trash|restore|member_set|update)|workspace\.member_set|workshop\.)/.test(action))await refreshRoomAccess();res.json(body)}catch(error){const e=error as Error&{status?:number;code?:string};res.status(e.status||502).json({error:e.status?e.message:'The database service is temporarily unavailable. Please try again.',code:e.code})}
 });
 app.get(['/health','/api/server'],(_req,res)=>res.status(process.env.VERCEL==='1'&&!distributedRealtime?503:200).json({ok:process.env.VERCEL!=='1'||distributedRealtime,service:'CanvasLab',persistence:'Supabase / Khalifah Board',realtime:distributedRealtime?'distributed':'single-instance'}));
 type Peer={ws:WebSocket;token:string;user:any;boardId:string;role:string;lastPresence:number;updates:number;window:number};
@@ -45,7 +45,7 @@ wsServer.on('connection',async(ws,req)=>{
  if(!boardId||!token){ws.close(4401,'Please sign in');return}
  if(process.env.VERCEL==='1'&&!distributedRealtime){send(ws,{type:'error',status:503,message:'Realtime server configuration is incomplete.'});ws.close(1013,'Realtime unavailable');return}
  const [auth,access]=await Promise.all([upstream('auth.me',{},token),upstream('board.get',{board_id:boardId},token)]);
- room=rooms.get(boardId);if(!room){room={doc:new Y.Doc(),peers:new Set(),chain:Promise.resolve(),voteCheck:0,privateVoting:false};rooms.set(boardId,room);const current=room;const reload=async()=>{const reader=current.peers.values().next().value;const data=await upstream('scene.load',{board_id:boardId},reader?.token||token);for(const u of data.updates||[])Y.applyUpdate(current.doc,Buffer.from(u,'base64'));await refreshRoomAccess(boardId);broadcast(current,{type:'update',update:b64(Y.encodeStateAsUpdate(current.doc))},undefined,false)};
+ room=rooms.get(boardId);if(!room){room={doc:new Y.Doc(),peers:new Set(),chain:Promise.resolve(),voteCheck:0,privateVoting:false};rooms.set(boardId,room);const current=room;let settled=false;const reload=async()=>{const reader=current.peers.values().next().value;const data=await upstream('scene.load',{board_id:boardId},reader?.token||token);for(const u of data.updates||[])Y.applyUpdate(current.doc,Buffer.from(u,'base64'));await refreshRoomAccess(boardId);broadcast(current,{type:'update',update:b64(Y.encodeStateAsUpdate(current.doc))},undefined,false)};
  current.relay=openRelay(boardId,async message=>{
   if(message.type==='invalidate'){await reload();return}
   if(message.type==='presence'||message.type==='leave'||message.type==='private-voting'){
@@ -53,8 +53,16 @@ wsServer.on('connection',async(ws,req)=>{
    if(message.type==='presence'&&current.privateVoting)return;
    broadcast(current,message,undefined,false);
   }
- },reload,()=>{for(const p of current.peers)p.ws.close(1012,'Realtime reconnecting')});
- room.loading=distributedRealtime?current.relay.ready:reload()}
+ },reload,()=>{
+  // A relay hiccup before this room ever loaded is a real outage - those
+  // clients have nothing to show yet, so send them back through reconnect.
+  // Once collaboration is already live here, a later blip in the
+  // cross-instance bridge alone should never force-disconnect every peer
+  // that's still being served fine from this instance's own room.doc -
+  // that was turning a brief relay error into a full outage for everyone.
+  if(!settled)for(const p of current.peers)p.ws.close(1012,'Realtime reconnecting');
+ });
+ room.loading=(distributedRealtime?current.relay.ready:reload()).then(()=>{settled=true})}
  await room.loading;
  peer={ws,token,user:auth.user,boardId,role:access.role||access.board?.role,lastPresence:0,updates:0,window:Date.now()};room.peers.add(peer);
  send(ws,{type:'init',update:b64(Y.encodeStateAsUpdate(room.doc)),vector:b64(Y.encodeStateVector(room.doc)),user:auth.user,role:peer.role,board:access.board,peers:[...room.peers].filter(p=>p!==peer).map(p=>({id:p.user.id,user:p.user}))});

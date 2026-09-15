@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import * as Y from "yjs";
 import {
@@ -222,6 +229,26 @@ const NO_OBJECTS: SceneObject[] = [];
 const isTyping = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
   !!target.closest('input,textarea,[contenteditable="true"]');
+/** Double-clicking a frame's own border resizes it to fit its contents -
+ * like FigJam's edge handle - rather than anywhere inside it, which used to
+ * fire just as easily from a click deep in its empty interior. */
+function nearFrameEdge(o: SceneObject, p: Point, threshold: number): boolean {
+  const local = rotate(p, -(o.rotation || 0), {
+    x: o.x + o.width / 2,
+    y: o.y + o.height / 2,
+  });
+  const withinX = local.x >= o.x - threshold && local.x <= o.x + o.width + threshold;
+  const withinY = local.y >= o.y - threshold && local.y <= o.y + o.height + threshold;
+  const nearVerticalEdge =
+    withinY &&
+    (Math.abs(local.x - o.x) <= threshold ||
+      Math.abs(local.x - (o.x + o.width)) <= threshold);
+  const nearHorizontalEdge =
+    withinX &&
+    (Math.abs(local.y - o.y) <= threshold ||
+      Math.abs(local.y - (o.y + o.height)) <= threshold);
+  return nearVerticalEdge || nearHorizontalEdge;
+}
 let measureCanvas: HTMLCanvasElement | null = null;
 /** Hug a free-standing text box tightly to its own content, like Figma's
  * auto-width text - rather than the padded container every other shape has. */
@@ -300,44 +327,107 @@ function EditableText({
       (o.text || "").length,
     );
   }, [o.id]);
+  // Auto-grow the textarea to fit whatever's actually typed (capped to the
+  // shape's own height, then it scrolls) instead of always filling the box
+  // top-down - that's what lets the flex wrapper below center it vertically
+  // to match the read-only render, rather than short text always hugging
+  // the top edge.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  });
   return (
-    <textarea
-      ref={ref}
-      aria-label="Edit object text"
-      className="canvas-text-editor"
-      value={value}
+    <div
+      className="canvas-text-editor-wrap"
       style={{
         width: o.width,
         height: o.height,
-        fontSize: o.fontSize || 20,
-        fontWeight: o.bold ? 700 : 400,
-        fontStyle: o.italic ? "italic" : "normal",
-        textAlign: o.align || "center",
-        padding: o.type === "text" ? 0 : 18,
+        alignItems: o.type === "sticky" ? "flex-start" : "center",
+        padding:
+          o.type === "text" ? 0 : o.type === "sticky" ? "25px 18px 18px" : 18,
+      }}
+    >
+      <textarea
+        ref={ref}
+        aria-label="Edit object text"
+        className="canvas-text-editor"
+        value={value}
+        style={{
+          width: "100%",
+          maxHeight: "100%",
+          fontSize: o.fontSize || 20,
+          fontWeight: o.bold ? 700 : 400,
+          fontStyle: o.italic ? "italic" : "normal",
+          textAlign: o.align || "center",
+        }}
+        onPointerDown={(e) => e.stopPropagation()}
+        onChange={(e) => {
+          setValue(e.target.value);
+          if (!composing.current) onChange(e.target.value);
+        }}
+        onCompositionStart={() => {
+          composing.current = true;
+        }}
+        onCompositionEnd={(e) => {
+          composing.current = false;
+          onChange(e.currentTarget.value);
+        }}
+        onBlur={onClose}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (
+            e.key === "Escape" ||
+            ((e.metaKey || e.ctrlKey) && e.key === "Enter")
+          ) {
+            e.preventDefault();
+            onClose();
+          }
+        }}
+      />
+    </div>
+  );
+}
+/** A frame's title chip renames in place. Saved on every keystroke (not just
+ * Enter/blur) so a click elsewhere - which clears `editing` immediately,
+ * before blur would otherwise get a chance to commit - never discards it,
+ * and sized off the text actually being typed rather than a fixed width. */
+function SectionNameInput({
+  o,
+  camera,
+  onCommit,
+  onDone,
+}: {
+  o: SceneObject;
+  camera: Camera;
+  onCommit: (value: string) => void;
+  onDone: () => void;
+}) {
+  const [value, setValue] = useState(o.text || "");
+  return (
+    <input
+      className="section-name-input"
+      aria-label="Frame name"
+      autoFocus
+      value={value}
+      style={{
+        left: camera.x + o.x * camera.zoom,
+        top: camera.y + (o.y - 35) * camera.zoom,
+        width: Math.max(100, value.length * 9 + 24) * camera.zoom,
+        height: 29 * camera.zoom,
+        fontSize: 14 * camera.zoom,
       }}
       onPointerDown={(e) => e.stopPropagation()}
       onChange={(e) => {
         setValue(e.target.value);
-        if (!composing.current) onChange(e.target.value);
+        onCommit(e.target.value);
       }}
-      onCompositionStart={() => {
-        composing.current = true;
-      }}
-      onCompositionEnd={(e) => {
-        composing.current = false;
-        onChange(e.currentTarget.value);
-      }}
-      onBlur={onClose}
       onKeyDown={(e) => {
         e.stopPropagation();
-        if (
-          e.key === "Escape" ||
-          ((e.metaKey || e.ctrlKey) && e.key === "Enter")
-        ) {
-          e.preventDefault();
-          onClose();
-        }
+        if (e.key === "Enter" || e.key === "Escape") onDone();
       }}
+      onBlur={onDone}
     />
   );
 }
@@ -1908,15 +1998,22 @@ export default function BoardEditor({
     }
     const soleSelection =
       selected.length === 1 && !!hit && selected[0] === hit.id;
-    if (hit?.type === "section" && (e.metaKey || e.ctrlKey) && canEdit) {
-      // Pressing a frame's background moves it right away (below), so the
-      // marquee over its contents moves to ⌘/Ctrl-drag.
+    if (
+      hit?.type === "section" &&
+      !e.shiftKey &&
+      !soleSelection &&
+      !hit.locked &&
+      canEdit
+    ) {
+      // An unselected frame's empty background starts a marquee over its
+      // contents, not a move - select the frame outright by clicking it
+      // without dragging, or drag its already-selected self to move it.
       setInteraction({
         kind: "marquee",
         start: p,
         current: p,
-        additive: e.shiftKey,
-        base: e.shiftKey ? selected : [],
+        additive: false,
+        base: [],
       });
       return;
     }
@@ -1949,6 +2046,21 @@ export default function BoardEditor({
               : undefined,
         });
       }
+    } else if (
+      !e.shiftKey &&
+      selected.length > 1 &&
+      canEdit &&
+      selectionBox &&
+      p.x >= selectionBox.x &&
+      p.x <= selectionBox.x + selectionBox.width &&
+      p.y >= selectionBox.y &&
+      p.y <= selectionBox.y + selectionBox.height
+    ) {
+      // Empty space inside a multi-selection's own bounding box still drags
+      // the whole group - you shouldn't have to land exactly on one of the
+      // selected shapes to move a block you already selected.
+      const items = expanded(selected).filter((o) => !o.locked);
+      setInteraction({ kind: "drag", start: p, items });
     } else {
       const base = e.shiftKey ? selected : [];
       if (!e.shiftKey) setSelected([]);
@@ -2758,11 +2870,15 @@ export default function BoardEditor({
           }
           const p = world({ x: e.clientX, y: e.clientY }),
             hit = hitObject(real, p);
-          // A double-click on a frame resizes it to hug its contents,
-          // rather than opening a text editor - matching how it reads on an
-          // empty patch of canvas too (no more implicit text creation).
-          if (hit?.type === "section") fitFrameToContent(hit.id);
-          else if (hit) editObject(hit.id);
+          // A double-click on a frame's own border resizes it to hug its
+          // contents, the same gesture FigJam uses on its edge handle - a
+          // double-click further inside the frame (its empty interior, or
+          // whatever's on top of it) falls through to that object's normal
+          // double-click instead, rather than always resizing the frame.
+          if (hit?.type === "section") {
+            if (nearFrameEdge(hit, p, 10 / camera.zoom))
+              fitFrameToContent(hit.id);
+          } else if (hit) editObject(hit.id);
         }}
         onContextMenu={(e) => {
           e.preventDefault();
@@ -2812,6 +2928,37 @@ export default function BoardEditor({
               onCell={stableCell}
             />
           ))}
+          {/* A frame's title chip floats above every object, regardless of
+              stacking order - drawn last here so nothing placed over the
+              frame can bury it. */}
+          {displayObjects
+            .filter((o) => o.type === "section" && editing !== o.id)
+            .map((o) => (
+              <g
+                key={`label-${o.id}`}
+                data-object-id={o.id}
+                data-section-label=""
+                style={canEdit ? { cursor: "text" } : undefined}
+                transform={`translate(${o.x} ${o.y}) rotate(${o.rotation || 0} ${o.width / 2} ${o.height / 2})`}
+              >
+                <rect
+                  y="-35"
+                  width={Math.max(100, (o.text?.length || 7) * 9 + 24)}
+                  height="29"
+                  rx="7"
+                  fill="#dcd9e9"
+                />
+                <text
+                  x="12"
+                  y="-15"
+                  fill="#423955"
+                  fontSize="14"
+                  fontWeight="600"
+                >
+                  {o.text || "Section"}
+                </text>
+              </g>
+            ))}
           {draft && (
             <g
               className={`object-draft ${toolbarDrag ? "toolbar-object-draft" : ""}`}
@@ -3125,35 +3272,6 @@ export default function BoardEditor({
                     style={{ cursor: `${h}-resize` }}
                   />
                 ))}
-                {RADIUS_TYPES.includes(one.type) &&
-                  (() => {
-                    const r = Math.min(
-                      one.radius ?? defaultRadius(one),
-                      one.width / 2,
-                      one.height / 2,
-                    );
-                    // Sitting exactly at 0 would hide this dot right behind
-                    // the resize-corner square; keep it visibly inset even
-                    // on a perfectly square corner, like Figma's own handle.
-                    const inset = Math.min(
-                      Math.max(r, 14 / camera.zoom),
-                      one.width / 2,
-                      one.height / 2,
-                    );
-                    return (["nw", "ne", "sw", "se"] as const).map((c) => (
-                      <circle
-                        key={`radius-${c}`}
-                        data-handle={`radius-${c}`}
-                        cx={c.includes("e") ? one.width - inset : inset}
-                        cy={c.includes("s") ? one.height - inset : inset}
-                        r={4 / camera.zoom}
-                        fill="white"
-                        stroke="#0d99ff"
-                        strokeWidth={1.5 / camera.zoom}
-                        style={{ cursor: "pointer" }}
-                      />
-                    ));
-                  })()}
                 {!["table", "section"].includes(one.type) && (
                   <>
                     <line
@@ -3498,34 +3616,12 @@ export default function BoardEditor({
         />
       </div>
       {editingObject?.type === "section" && (
-        <input
-          className="section-name-input"
-          aria-label="Frame name"
-          autoFocus
-          defaultValue={editingObject.text || ""}
-          style={{
-            left: camera.x + editingObject.x * camera.zoom,
-            top: camera.y + (editingObject.y - 35) * camera.zoom,
-            width: Math.max(
-              100,
-              (editingObject.text?.length || 7) * 9 + 24,
-            ) * camera.zoom,
-            height: 29 * camera.zoom,
-            fontSize: 14 * camera.zoom,
-          }}
-          onPointerDown={(e) => e.stopPropagation()}
-          onKeyDown={(e) => {
-            e.stopPropagation();
-            if (e.key === "Enter") {
-              setText(editingObject.id, e.currentTarget.value);
-              setEditing(null);
-            }
-            if (e.key === "Escape") setEditing(null);
-          }}
-          onBlur={(e) => {
-            setText(editingObject.id, e.currentTarget.value);
-            setEditing(null);
-          }}
+        <SectionNameInput
+          key={editingObject.id}
+          o={editingObject}
+          camera={camera}
+          onCommit={(value) => setText(editingObject.id, value)}
+          onDone={() => setEditing(null)}
         />
       )}
       {editingObject && editingObject.type !== "section" && (
@@ -3552,30 +3648,11 @@ export default function BoardEditor({
                   width: Math.max(20, Math.ceil(width) + 6),
                   height: Math.max(24, Math.ceil(height) + 4),
                 });
-                return;
               }
-              const lines = value
-                .split("\n")
-                .reduce(
-                  (n, line) =>
-                    n +
-                    Math.max(
-                      1,
-                      Math.ceil(
-                        line.length /
-                          Math.max(
-                            1,
-                            (editingObject.width - 36) /
-                              ((editingObject.fontSize || 20) * 0.55),
-                          ),
-                      ),
-                    ),
-                  0,
-                );
-              const required =
-                lines * (editingObject.fontSize || 20) * 1.38 + 40;
-              if (required > editingObject.height)
-                updateObject(editingObject.id, { height: required });
+              // Every other shape keeps the size it already has - a
+              // sticky/rectangle/etc. is a fixed container the user sized on
+              // purpose; growing it out from under them while they type was
+              // more disruptive than the overflow it was meant to avoid.
             }}
             onClose={() => setEditing(null)}
           />
@@ -4238,16 +4315,34 @@ export default function BoardEditor({
               <span className="toolbar-divider" />
               <label className="corner-radius-field" title="Corner radius">
                 <SquareRoundCorner size={15} />
-                <input
-                  type="number"
+                <select
                   aria-label="Corner radius"
-                  min={0}
-                  max={Math.floor(Math.min(one.width, one.height) / 2)}
                   value={Math.round(one.radius ?? defaultRadius(one))}
                   onChange={(e) =>
                     patchSelected({ radius: Math.max(0, +e.target.value) })
                   }
-                />
+                >
+                  {[
+                    ...new Set([
+                      0,
+                      2,
+                      4,
+                      8,
+                      12,
+                      16,
+                      24,
+                      32,
+                      48,
+                      Math.round(one.radius ?? defaultRadius(one)),
+                    ]),
+                  ]
+                    .filter(
+                      (n) =>
+                        n <= Math.floor(Math.min(one.width, one.height) / 2),
+                    )
+                    .sort((a, b) => a - b)
+                    .map((n) => <option key={n}>{n}</option>)}
+                </select>
               </label>
             </>
           )}

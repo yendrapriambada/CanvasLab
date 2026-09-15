@@ -83,7 +83,7 @@ interface Obstacle extends Bounds { id:string }
  * edge visually hugs/crosses the rounded corner instead of clearing it. */
 function cornerClearance(o:SceneObject):number {
  if(!['rectangle','rounded','section'].includes(o.type))return 0;
- const base=o.type==='rounded'?16:o.type==='section'?14:0;
+ const base=o.type==='rounded'?16:0;
  return Math.min(o.radius??base,o.width/2,o.height/2);
 }
 function inflated(o:SceneObject,padding:number):Obstacle {

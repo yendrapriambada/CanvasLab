@@ -13,7 +13,7 @@ export function defaultRadius(o: SceneObject) {
     o.type === "rounded"
       ? 16
       : o.type === "section"
-        ? 14
+        ? 0
         : o.type === "rectangle"
           ? 0
           : 6;
@@ -231,20 +231,10 @@ export const SceneView = memo(function SceneView({
           fill={o.type === "text" ? "transparent" : fill}
         />
       )}
-      {o.type === "section" && (
-        <g data-section-label="" style={details ? { cursor: "text" } : undefined}>
-          <rect
-            y="-35"
-            width={Math.max(100, (o.text?.length || 7) * 9 + 24)}
-            height="29"
-            rx="7"
-            fill="#dcd9e9"
-          />
-          <text x="12" y="-15" fill="#423955" fontSize="14" fontWeight="600">
-            {editing ? "" : o.text || "Section"}
-          </text>
-        </g>
-      )}
+      {/* A section's title chip is rendered separately, in a top-level
+          overlay pass (see BoardEditor) - drawn there so it always floats
+          above every other object instead of being buried by whatever the
+          frame's own stacking order happens to place over it. */}
       {o.type === "table" && details ? (
         <foreignObject width={o.width} height={o.height}>
           <div className="canvas-table-wrapper">
