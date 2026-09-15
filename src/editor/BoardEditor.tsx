@@ -1998,12 +1998,29 @@ export default function BoardEditor({
     }
     const soleSelection =
       selected.length === 1 && !!hit && selected[0] === hit.id;
+    const insideSelectionBox =
+      !e.shiftKey &&
+      selected.length > 1 &&
+      canEdit &&
+      !!selectionBox &&
+      p.x >= selectionBox.x &&
+      p.x <= selectionBox.x + selectionBox.width &&
+      p.y >= selectionBox.y &&
+      p.y <= selectionBox.y + selectionBox.height;
+    // A frame sitting underneath a multi-selection shouldn't steal a drag
+    // that starts inside the selection's own bounding box - that should
+    // move the selected group, exactly like empty canvas there would,
+    // instead of grabbing or marquee-ing the frame the group happens to be
+    // sitting on top of.
+    const hitIsBackgroundFrame =
+      hit?.type === "section" && !selected.includes(hit.id);
     if (
       hit?.type === "section" &&
       !e.shiftKey &&
       !soleSelection &&
       !hit.locked &&
-      canEdit
+      canEdit &&
+      !(insideSelectionBox && hitIsBackgroundFrame)
     ) {
       // An unselected frame's empty background starts a marquee over its
       // contents, not a move - select the frame outright by clicking it
@@ -2017,7 +2034,7 @@ export default function BoardEditor({
       });
       return;
     }
-    if (hit) {
+    if (hit && !(insideSelectionBox && hitIsBackgroundFrame)) {
       const ids = e.shiftKey
         ? selected.includes(hit.id)
           ? selected.filter((id) => id !== hit.id)
@@ -2046,19 +2063,11 @@ export default function BoardEditor({
               : undefined,
         });
       }
-    } else if (
-      !e.shiftKey &&
-      selected.length > 1 &&
-      canEdit &&
-      selectionBox &&
-      p.x >= selectionBox.x &&
-      p.x <= selectionBox.x + selectionBox.width &&
-      p.y >= selectionBox.y &&
-      p.y <= selectionBox.y + selectionBox.height
-    ) {
+    } else if (insideSelectionBox) {
       // Empty space inside a multi-selection's own bounding box still drags
       // the whole group - you shouldn't have to land exactly on one of the
-      // selected shapes to move a block you already selected.
+      // selected shapes to move a block you already selected, even when a
+      // frame sits underneath the gap.
       const items = expanded(selected).filter((o) => !o.locked);
       setInteraction({ kind: "drag", start: p, items });
     } else {
@@ -2698,8 +2707,18 @@ export default function BoardEditor({
     };
   };
   const handleObject =
-    !editing && tool === "select" && interaction.kind === "idle"
-      ? pageObjects.find((o) => o.id === hovered) || one
+    !editing &&
+    tool === "select" &&
+    interaction.kind === "idle" &&
+    // Match FigJam: the "+" connect handles only ever show on a shape
+    // that's already selected, and only once you actually hover it - not
+    // for merely hovering an unselected shape, and not just from having it
+    // selected with the pointer elsewhere. They also hide once zoomed out
+    // too far to be a useful click target.
+    camera.zoom >= 0.5 &&
+    one &&
+    hovered === one.id
+      ? one
       : null;
   const quickConnectPreview =
     interaction.kind === "connect" && interaction.fromAnchor && !connectorTarget
